@@ -57,12 +57,25 @@
         "default": "./dist/compat.js"
       }
     },
+    "./nestjs": {
+      "import": {
+        "types": "./dist/nestjs.d.mts",
+        "default": "./dist/nestjs.mjs"
+      },
+      "require": {
+        "types": "./dist/nestjs.d.ts",
+        "default": "./dist/nestjs.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
       "compat": [
         "./dist/compat.d.ts"
+      ],
+      "nestjs": [
+        "./dist/nestjs.d.ts"
       ]
     }
   },

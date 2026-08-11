@@ -4,6 +4,9 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     compat: 'src/compat/index.ts',
+    // Separate so importing the package root never pulls in @nestjs/common,
+    // which is an optional peer.
+    nestjs: 'src/nestjs/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,
