@@ -44,6 +44,16 @@ export {
   type RollbackHook,
 } from './core/hooks/index.js';
 
+// ── locking ──────────────────────────────────────────────────────────────────
+export {
+  lockRowsInOrder,
+  withLockTimeout,
+  withStatementTimeout,
+  type LockMode,
+  type LockRowsInOrderOptions,
+  type LockStrategy,
+} from './core/locking/index.js';
+
 // ── introspection ────────────────────────────────────────────────────────────
 export {
   currentAttempt,
