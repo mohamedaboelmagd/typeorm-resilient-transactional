@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { EntityManager, QueryRunner } from 'typeorm';
 
 import type { IsolationLevel } from '../enums.js';
+import type { HookRegistry } from '../hooks/registry.js';
 
 export const DEFAULT_DATA_SOURCE_NAME = 'default';
 
@@ -22,6 +23,14 @@ export interface TransactionState {
   readonly depth: number;
   /** `Date.now()` when the owning transaction began — not reset by savepoints. */
   readonly startedAt: number;
+  /**
+   * Lifecycle callbacks for this attempt.
+   *
+   * Shared with joined and savepoint scopes, so a hook registered deep in the
+   * call stack fires when the *owner* commits. Replaced wholesale on each retry,
+   * which is what discards a failed attempt's hooks.
+   */
+  readonly hooks: HookRegistry;
   /**
    * True when this scope started the transaction and is therefore allowed to
    * commit, roll back, and (from Phase 3) retry it. Joined scopes are not owners.

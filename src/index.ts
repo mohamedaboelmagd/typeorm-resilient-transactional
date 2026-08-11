@@ -28,6 +28,22 @@ export {
 } from './core/runner/run-in-transaction.js';
 export { wrapInResilientTransaction } from './core/runner/wrap-in-transaction.js';
 
+// ── lifecycle hooks ──────────────────────────────────────────────────────────
+export {
+  NoActiveTransactionError,
+  runOnCommit,
+  runOnComplete,
+  runOnRetry,
+  runOnRollback,
+  runOnTransactionCommit,
+  runOnTransactionComplete,
+  runOnTransactionRollback,
+  type CommitHook,
+  type CompleteHook,
+  type RetryHook,
+  type RollbackHook,
+} from './core/hooks/index.js';
+
 // ── introspection ────────────────────────────────────────────────────────────
 export {
   currentAttempt,

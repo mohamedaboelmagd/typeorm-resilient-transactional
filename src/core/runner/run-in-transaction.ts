@@ -7,7 +7,8 @@ import {
   type TransactionState,
 } from '../context/store.js';
 import { getDataSourceByName, isContextInitialized } from '../datasource/registry.js';
-import { warn } from '../diagnostics.js';
+import { warn, warnOnce } from '../diagnostics.js';
+import { HookRegistry } from '../hooks/registry.js';
 import {
   ContextNotInitializedError,
   RetryNotPermittedError,
@@ -93,6 +94,7 @@ async function runAsOwner<T>(
   isolation: IsolationLevel | undefined,
   fn: TransactionCallback<T>,
   attempt: number,
+  hooks: HookRegistry,
 ): Promise<T> {
   const queryRunner = dataSource.createQueryRunner();
 
@@ -109,19 +111,26 @@ async function runAsOwner<T>(
       depth: 0,
       startedAt: Date.now(),
       isOwner: true,
+      hooks,
     };
 
-    try {
-      const result = await runWithTransactionState(dataSourceName, state, () =>
-        fn(queryRunner.manager),
-      );
+    let result: T;
 
+    try {
+      result = await runWithTransactionState(dataSourceName, state, () => fn(queryRunner.manager));
       await queryRunner.commitTransaction();
-      return result;
     } catch (error) {
       await safeRollback(queryRunner);
       throw error;
     }
+
+    // Deliberately outside `runWithTransactionState`: the transaction is over, so
+    // a hook that touches the database must get a pooled connection rather than
+    // this query runner. Errors are logged, not thrown — the commit is durable
+    // and no notification failure can undo it.
+    await hooks.runCommit();
+
+    return result;
   } finally {
     await safeRelease(queryRunner);
   }
@@ -157,6 +166,10 @@ async function runInSavepoint<T>(
 
   const { queryRunner } = parent;
 
+  // Anything this block registers is discarded if it rolls back: its work was
+  // undone, so its commit hooks must not fire when the outer transaction commits.
+  const mark = parent.hooks.mark();
+
   await queryRunner.startTransaction();
 
   const state: TransactionState = {
@@ -174,6 +187,7 @@ async function runInSavepoint<T>(
     return result;
   } catch (error) {
     await safeRollback(queryRunner);
+    parent.hooks.rollbackTo(mark);
     throw error;
   }
 }
@@ -210,7 +224,7 @@ function runSuspended<T>(
  * Retry lives here rather than inside `runAsOwner` because each attempt needs a
  * brand-new query runner and a fresh `START TRANSACTION`.
  */
-function runOwned<T>(
+async function runOwned<T>(
   dataSource: DataSource,
   dataSourceName: string,
   isolation: IsolationLevel | undefined,
@@ -219,18 +233,56 @@ function runOwned<T>(
 ): Promise<T> {
   const retry = resolveRetry(options?.retry);
 
-  if (retry === undefined) {
-    return runAsOwner(dataSource, dataSourceName, isolation, fn, 1);
-  }
+  // Replaced on every attempt. That replacement *is* the discard: a hook
+  // registered during an attempt that failed never reaches the next one.
+  let hooks = new HookRegistry();
 
-  return runWithRetry((attempt) => runAsOwner(dataSource, dataSourceName, isolation, fn, attempt), {
-    ...retry,
-    timeoutMs: options?.timeoutMs,
-    onRetry: options?.onRetry,
-    onExhausted: options?.onExhausted,
-    method: options?.name,
-    dataSourceName,
-  });
+  const attempt = (attemptNumber: number): Promise<T> => {
+    hooks = new HookRegistry();
+    return runAsOwner(dataSource, dataSourceName, isolation, fn, attemptNumber, hooks);
+  };
+
+  try {
+    if (retry === undefined) return await attempt(1);
+
+    return await runWithRetry(attempt, {
+      ...retry,
+      timeoutMs: options?.timeoutMs,
+      onRetry: (info) => {
+        warnOnRetry(info.method);
+        hooks.runRetry(info);
+        options?.onRetry?.(info);
+      },
+      onExhausted: options?.onExhausted,
+      method: options?.name,
+      dataSourceName,
+    });
+  } catch (error) {
+    // `runWithRetry` only throws once it has stopped retrying, so reaching here
+    // means the transaction is finally abandoned — the one moment rollback hooks
+    // should fire. Between attempts they are discarded, not run.
+    await hooks.runRollback(error);
+    throw error;
+  }
+}
+
+/**
+ * Says out loud that a method body was executed more than once.
+ *
+ * Retry is invisible by design, and the failure it enables — a side effect firing
+ * once per attempt — produces no error at all. One warning per method is the
+ * cheapest way to make a developer look at `docs/safety.md` before that happens
+ * in production.
+ */
+function warnOnRetry(method: string | undefined): void {
+  const label = method ?? 'a transaction';
+
+  warnOnce(
+    `retry-side-effects:${label}`,
+    `${label} was retried, so its body ran more than once. Anything it does outside ` +
+      'the database — emails, webhooks, payments, queue publishes — happened again. ' +
+      'Move those into runOnCommit(). See docs/safety.md.',
+  );
 }
 
 /**

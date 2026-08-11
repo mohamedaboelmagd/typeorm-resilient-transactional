@@ -46,6 +46,12 @@ export const runInTransaction: <T>(
 /** @see wrapInResilientTransaction */
 export const wrapInTransaction = wrapInResilientTransaction;
 
+export {
+  runOnTransactionCommit,
+  runOnTransactionComplete,
+  runOnTransactionRollback,
+} from '../core/hooks/index.js';
+
 export { Transactional } from '../core/decorator.js';
 export { IsolationLevel, Propagation } from '../core/enums.js';
 export { TransactionalError } from '../core/errors/index.js';
