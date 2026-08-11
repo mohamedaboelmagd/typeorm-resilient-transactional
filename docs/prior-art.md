@@ -16,12 +16,12 @@ tags/branches named in each section.
 
 Measured 2026-08-11 from the npm registry API and GitHub API.
 
-| Package | Weekly downloads | Runtime deps | Retry? |
-|---|---:|---|---|
-| `typeorm` | 4,826,597 | — | Only for CockroachDB (see §4) |
-| `nestjs-cls` | 1,175,524 | — | No |
-| `typeorm-transactional` | 172,112 | `cls-hooked`, `@types/cls-hooked`, `semver` | **No** |
-| `@nestjs-cls/transactional` | 148,247 | — | **No** |
+| Package                     | Weekly downloads | Runtime deps                                | Retry?                        |
+| --------------------------- | ---------------: | ------------------------------------------- | ----------------------------- |
+| `typeorm`                   |        4,826,597 | —                                           | Only for CockroachDB (see §4) |
+| `nestjs-cls`                |        1,175,524 | —                                           | No                            |
+| `typeorm-transactional`     |          172,112 | `cls-hooked`, `@types/cls-hooked`, `semver` | **No**                        |
+| `@nestjs-cls/transactional` |          148,247 | —                                           | **No**                        |
 
 TypeORM `latest` is **1.1.0** (2026-07-13). The `0.3.x` line is tagged **`legacy`** but still
 maintained — `0.3.31` shipped the same day as 1.1.0. We support both.
@@ -42,11 +42,11 @@ Two interchangeable storage drivers behind a `StorageDriver` interface: `cls-hoo
 
 > **This corrects a premise in our own brief.** We had positioned "uses AsyncLocalStorage, not
 > `cls-hooked`" as a differentiator. It is not — `src/storage/driver/async-local-storage/index.ts`
-> has existed for some time. What *is* a real differentiator is **zero runtime dependencies**:
+> has existed for some time. What _is_ a real differentiator is **zero runtime dependencies**:
 > `cls-hooked`, `@types/cls-hooked`, and `semver` are all listed under `dependencies`, so every
 > consumer installs them regardless of which driver they select.
 
-Their ALS driver deliberately reimplements `cls-hooked`'s *layered* semantics on top of
+Their ALS driver deliberately reimplements `cls-hooked`'s _layered_ semantics on top of
 `AsyncLocalStorage`, because the two have different contracts (ALS requires the store to be passed
 on every `.run()`; cls-hooked manages layers internally). The result is a `Store` class holding a
 `layers: (Storage|undefined)[]` stack with `enter()`/`exit()`.
@@ -72,8 +72,12 @@ our own design most likely to go wrong.
 ```ts
 Object.defineProperty(dataSource, 'manager', {
   configurable: true,
-  get() { return getEntityManagerInContext(this[TYPEORM_DATA_SOURCE_NAME]) || originalManager },
-  set(manager) { originalManager = manager },
+  get() {
+    return getEntityManagerInContext(this[TYPEORM_DATA_SOURCE_NAME]) || originalManager;
+  },
+  set(manager) {
+    originalManager = manager;
+  },
 });
 ```
 
@@ -87,22 +91,26 @@ constructor(target, manager, queryRunner?) { this.manager = manager; /* … */ }
 ```
 
 A getter-only accessor on `Repository.prototype` would be shadowed by that own property. Their
-workaround is to define a **getter *and* setter** pair on the prototype. Because a setter exists on
+workaround is to define a **getter _and_ setter** pair on the prototype. Because a setter exists on
 the prototype chain, `this.manager = manager` in the constructor **invokes the setter instead of
 creating an own data property**, and the setter stashes the real manager under a symbol:
 
 ```ts
 Object.defineProperty(Repository.prototype, 'manager', {
   configurable: true,
-  get() { return getEntityManagerInContext(/* … */) || this[TYPEORM_ENTITY_MANAGER_NAME] },
-  set(manager) { this[TYPEORM_ENTITY_MANAGER_NAME] = manager },
+  get() {
+    return getEntityManagerInContext(/* … */) || this[TYPEORM_ENTITY_MANAGER_NAME];
+  },
+  set(manager) {
+    this[TYPEORM_ENTITY_MANAGER_NAME] = manager;
+  },
 });
 ```
 
 They additionally wrap `EntityManager.prototype.getRepository` and `Repository.prototype.extend` to
 backfill the symbol for repositories that were constructed before the patch was installed.
 
-This technique is correct and we adopt it. It also means the *shape* we depend on
+This technique is correct and we adopt it. It also means the _shape_ we depend on
 (`DataSource.manager`, `Repository.manager`, `createQueryRunner(mode)`,
 `startTransaction(isolationLevel?)`) is **identical across TypeORM 0.3.31 and 1.1.0** — verified by
 reading both — so dual-version support costs us very little.
@@ -192,14 +200,24 @@ Drizzle, Knex, Kysely, MongoDB, Mongoose, and pg-promise.
 The entire TypeORM adapter is ~60 lines:
 
 ```ts
-export class TransactionalAdapterTypeOrm implements TransactionalAdapter<DataSource, EntityManager, TypeOrmTransactionOptions> {
-    optionsFactory = (dataSource: DataSource) => ({
-        wrapWithTransaction: async (options, fn, setClient) =>
-            dataSource.transaction(options?.isolationLevel, (trx) => { setClient(trx); return fn() }),
-        wrapWithNestedTransaction: async (options, fn, setClient, client) =>
-            client.transaction(options?.isolationLevel, (trx) => { setClient(trx); return fn() }),
-        getFallbackInstance: () => dataSource.manager,
-    });
+export class TransactionalAdapterTypeOrm implements TransactionalAdapter<
+  DataSource,
+  EntityManager,
+  TypeOrmTransactionOptions
+> {
+  optionsFactory = (dataSource: DataSource) => ({
+    wrapWithTransaction: async (options, fn, setClient) =>
+      dataSource.transaction(options?.isolationLevel, (trx) => {
+        setClient(trx);
+        return fn();
+      }),
+    wrapWithNestedTransaction: async (options, fn, setClient, client) =>
+      client.transaction(options?.isolationLevel, (trx) => {
+        setClient(trx);
+        return fn();
+      }),
+    getFallbackInstance: () => dataSource.manager,
+  });
 }
 ```
 
@@ -220,8 +238,8 @@ lets existing repository code work unchanged.
 
 ## 3. TypeORM issue #9806
 
-[typeorm/typeorm#9806](https://github.com/typeorm/typeorm/issues/9806) — *"Auto Retry options on
-error in transactions(e.g. Deadlock)"*. Opened 2023-02-24 by **@jayvaghani**. **Still open** as of
+[typeorm/typeorm#9806](https://github.com/typeorm/typeorm/issues/9806) — _"Auto Retry options on
+error in transactions(e.g. Deadlock)"_. Opened 2023-02-24 by **@jayvaghani**. **Still open** as of
 2026-08-11, with **30 reactions** and 5 comments.
 
 The original ask, verbatim:
@@ -236,13 +254,13 @@ per query. That maps almost exactly onto our `retry: { enabled, maxAttempts, bac
 
 All five comments, and what each tells us:
 
-| Commenter | Date | Signal |
-|---|---|---|
-| @daitay4 | 2023-06-06 | "+1, exact same reasons" |
-| @scr4bble | 2024-06-19 | Facing deadlocks; would rather configure retry than redesign around them |
-| **@quezak** | 2024-08-13 | **Needs retry for hot-standby recovery conflicts on a Postgres replica** |
-| @joachimbulow | 2025-04-23 | Points out TypeORM already has retry logic "in various places" — see §4 |
-| @jayvaghani | 2025-04-23 | "I will share PR soon" — none landed in the 16 months since |
+| Commenter     | Date       | Signal                                                                   |
+| ------------- | ---------- | ------------------------------------------------------------------------ |
+| @daitay4      | 2023-06-06 | "+1, exact same reasons"                                                 |
+| @scr4bble     | 2024-06-19 | Facing deadlocks; would rather configure retry than redesign around them |
+| **@quezak**   | 2024-08-13 | **Needs retry for hot-standby recovery conflicts on a Postgres replica** |
+| @joachimbulow | 2025-04-23 | Points out TypeORM already has retry logic "in various places" — see §4  |
+| @jayvaghani   | 2025-04-23 | "I will share PR soon" — none landed in the 16 months since              |
 
 Two findings worth acting on.
 
@@ -267,8 +285,8 @@ project.
 ### 4.1 CockroachDB gets retry; Postgres does not
 
 TypeORM's CockroachDB driver has long implemented transaction retry replay, and it was still being
-actively fixed during the 1.0 cycle — PR #11861, *"fix(cockroachdb): preserve structured query
-results during txn retry replay"*, shipped in 1.0.0.
+actively fixed during the 1.0 cycle — PR #11861, _"fix(cockroachdb): preserve structured query
+results during txn retry replay"_, shipped in 1.0.0.
 
 The maintainers therefore already accept that **retry belongs at this layer** — they simply
 implemented it for the one database whose vendor documentation makes retry unavoidable. Postgres
@@ -314,8 +332,8 @@ than allocating a new one. `typeorm-transactional`'s NESTED is wrong by one line
 1.1.0 added, in `startTransaction`:
 
 ```ts
-isolationLevel ??= this.dataSource.options.isolationLevel
-validateIsolationLevel(this.driver.supportedIsolationLevels, isolationLevel)
+isolationLevel ??= this.dataSource.options.isolationLevel;
+validateIsolationLevel(this.driver.supportedIsolationLevels, isolationLevel);
 ```
 
 Two implications for our dual-version support: on 1.x an unsupported isolation level now **throws
@@ -338,15 +356,15 @@ because it is what senior backend engineers arriving from Java will search for.
 
 Mapping onto our API:
 
-| Spring | Ours | Note |
-|---|---|---|
-| `maxAttempts` | `retry.maxAttempts` | Same name, same default of 3 |
-| `@Backoff(delay=…)` | `backoff.baseMs` | |
-| `@Backoff(maxDelay=…)` | `backoff.capMs` | |
-| `@Backoff(multiplier=…)` | `'exponential'` strategy | |
-| `@Backoff(random=true)` | `'exponential-full-jitter'` | **We default this on; Spring defaults it off** |
-| `@Recover` | `onExhausted` callback | Ours is a callback, not method dispatch |
-| `TransactionTemplate` | `runInResilientTransaction()` | Programmatic, non-decorator escape hatch |
+| Spring                   | Ours                          | Note                                           |
+| ------------------------ | ----------------------------- | ---------------------------------------------- |
+| `maxAttempts`            | `retry.maxAttempts`           | Same name, same default of 3                   |
+| `@Backoff(delay=…)`      | `backoff.baseMs`              |                                                |
+| `@Backoff(maxDelay=…)`   | `backoff.capMs`               |                                                |
+| `@Backoff(multiplier=…)` | `'exponential'` strategy      |                                                |
+| `@Backoff(random=true)`  | `'exponential-full-jitter'`   | **We default this on; Spring defaults it off** |
+| `@Recover`               | `onExhausted` callback        | Ours is a callback, not method dispatch        |
+| `TransactionTemplate`    | `runInResilientTransaction()` | Programmatic, non-decorator escape hatch       |
 
 The propagation names (`REQUIRED`, `REQUIRES_NEW`, `NESTED`, …) already came into this ecosystem
 from Spring via `typeorm-transactional`, so we inherit them unchanged.
@@ -357,7 +375,7 @@ from Spring via `typeorm-transactional`, so we inherit them unchanged.
 
 ## 6. AWS: exponential backoff and jitter
 
-The canonical reference is the AWS Architecture Blog's *"Exponential Backoff And Jitter"* (Marc
+The canonical reference is the AWS Architecture Blog's _"Exponential Backoff And Jitter"_ (Marc
 Brooker, 2015), whose measured result is that **full jitter** completes contended work in fewer
 total calls than exponential backoff without jitter.
 
@@ -374,7 +392,7 @@ stating precisely: **two transactions that just deadlocked are, by construction,
 Postgres detected the cycle and killed one of them at the same instant it let the other proceed. If
 both retry after an identical `baseMs * 2^n` delay, they re-enter the same lock-acquisition order at
 the same moment and deadlock again — and naive exponential backoff makes each successive collision
-*more* expensive, not less. Jitter is what breaks the phase lock.
+_more_ expensive, not less. Jitter is what breaks the phase lock.
 
 Phase 3 must include a test demonstrating a measurably higher success rate with jitter than without,
 under identical contention. If that test does not show a difference, this rationale is wrong and
@@ -403,13 +421,13 @@ deadlocks is good, not having them is better.
 **[Error Codes](https://www.postgresql.org/docs/current/errcodes-appendix.html)** — Class 40
 (Transaction Rollback) and Class 08 (Connection Exception). Our default `retryOn` set:
 
-| SQLSTATE | Name | Default | Rationale |
-|---|---|---|---|
-| `40001` | `serialization_failure` | ✅ retry | Documented cost of `SERIALIZABLE`; also raised for hot-standby recovery conflicts (§3) |
-| `40P01` | `deadlock_detected` | ✅ retry | Inevitable under out-of-order lock acquisition |
-| `55P03` | `lock_not_available` | ✅ retry | From `NOWAIT`; the caller asked not to wait, not to fail |
-| `57014` | `query_canceled` | ⚠️ opt-in | May be a `statement_timeout`; retrying amplifies the load that caused it |
-| `08xxx` | connection exceptions | ❌ **never by default** | See below |
+| SQLSTATE | Name                    | Default                 | Rationale                                                                              |
+| -------- | ----------------------- | ----------------------- | -------------------------------------------------------------------------------------- |
+| `40001`  | `serialization_failure` | ✅ retry                | Documented cost of `SERIALIZABLE`; also raised for hot-standby recovery conflicts (§3) |
+| `40P01`  | `deadlock_detected`     | ✅ retry                | Inevitable under out-of-order lock acquisition                                         |
+| `55P03`  | `lock_not_available`    | ✅ retry                | From `NOWAIT`; the caller asked not to wait, not to fail                               |
+| `57014`  | `query_canceled`        | ⚠️ opt-in               | May be a `statement_timeout`; retrying amplifies the load that caused it               |
+| `08xxx`  | connection exceptions   | ❌ **never by default** | See below                                                                              |
 
 **Why connection errors are not retried by default — this is a feature.** If the connection drops
 during `COMMIT`, the client cannot know whether the server applied the commit before the socket
@@ -423,38 +441,38 @@ that need `SERIALIZABLE` most. Users may opt in per-SQLSTATE, behind a documente
 
 ### Copy
 
-| From | What | Why |
-|---|---|---|
-| `typeorm-transactional` | Public API names — `@Transactional`, `Propagation`, `IsolationLevel`, `initializeTransactionalContext`, `addTransactionalDataSource`, `runOnTransactionCommit/Rollback/Complete` | Compatibility is the adoption lever; a one-line import change is the whole migration story |
-| `typeorm-transactional` | Prototype getter+setter pair to intercept `Repository`'s ctor assignment (§1.2) | The only technique that works given `this.manager = manager`; correct, and we verified it against both TypeORM lines |
-| `typeorm-transactional` | Per-instance `DataSource.manager` patching + named multi-datasource registry | Sound, and required for multi-tenant setups |
-| `nestjs-cls` | Internal `wrap` / `wrapNested` / `fallback` boundary | Keeps `src/core/` honest and framework-free |
-| Spring Retry | `maxAttempts`, backoff vocabulary, `recover` concept | Zero-cost familiarity for the target user |
-| TypeORM | `QueryRunner.transactionDepth` savepoint machinery (§4.2) | Already correct; we route to it instead of reimplementing |
+| From                    | What                                                                                                                                                                             | Why                                                                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `typeorm-transactional` | Public API names — `@Transactional`, `Propagation`, `IsolationLevel`, `initializeTransactionalContext`, `addTransactionalDataSource`, `runOnTransactionCommit/Rollback/Complete` | Compatibility is the adoption lever; a one-line import change is the whole migration story                           |
+| `typeorm-transactional` | Prototype getter+setter pair to intercept `Repository`'s ctor assignment (§1.2)                                                                                                  | The only technique that works given `this.manager = manager`; correct, and we verified it against both TypeORM lines |
+| `typeorm-transactional` | Per-instance `DataSource.manager` patching + named multi-datasource registry                                                                                                     | Sound, and required for multi-tenant setups                                                                          |
+| `nestjs-cls`            | Internal `wrap` / `wrapNested` / `fallback` boundary                                                                                                                             | Keeps `src/core/` honest and framework-free                                                                          |
+| Spring Retry            | `maxAttempts`, backoff vocabulary, `recover` concept                                                                                                                             | Zero-cost familiarity for the target user                                                                            |
+| TypeORM                 | `QueryRunner.transactionDepth` savepoint machinery (§4.2)                                                                                                                        | Already correct; we route to it instead of reimplementing                                                            |
 
 ### Improve
 
-| Their behaviour | Ours | Why |
-|---|---|---|
-| No retry anywhere in the ecosystem | Owner-only retry with SQLSTATE classification, full jitter, wall-clock budget | The entire reason this library exists |
-| Arity checks that throw at bootstrap (§1.3) | Behavioural capability detection; degrade with a warning | A TypeORM patch release must not hard-crash every consumer |
-| Commit hooks via `setImmediate`, unawaited, throwing hooks crash the process (§1.5) | Awaited after `COMMIT`, per-hook try/catch, errors logged not thrown | Callers can await side effects; one bad listener can't take down the process |
-| Hooks are per-context | Hooks are **per-attempt**, reset on retry | A hook registered during a failed attempt must never fire |
-| `NESTED` silently means `REQUIRES_NEW` (§1.4) | Real savepoints, retry disabled by default at savepoint level | Correctness — and `40001`/`40P01` abort the whole transaction anyway, so savepoint-level retry for them would be a lie |
-| ALS driver silently swallows out-of-context writes (§1.1) | Explicit `isInTransaction()` / `getTransactionContext()`, no silent no-op | Silent failure is the worst failure mode in a correctness library |
-| 3 runtime dependencies | **Zero** | Smaller install, no `cls-hooked` (which relies on `async_hooks` internals), no transitive CVE surface |
+| Their behaviour                                                                     | Ours                                                                          | Why                                                                                                                    |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| No retry anywhere in the ecosystem                                                  | Owner-only retry with SQLSTATE classification, full jitter, wall-clock budget | The entire reason this library exists                                                                                  |
+| Arity checks that throw at bootstrap (§1.3)                                         | Behavioural capability detection; degrade with a warning                      | A TypeORM patch release must not hard-crash every consumer                                                             |
+| Commit hooks via `setImmediate`, unawaited, throwing hooks crash the process (§1.5) | Awaited after `COMMIT`, per-hook try/catch, errors logged not thrown          | Callers can await side effects; one bad listener can't take down the process                                           |
+| Hooks are per-context                                                               | Hooks are **per-attempt**, reset on retry                                     | A hook registered during a failed attempt must never fire                                                              |
+| `NESTED` silently means `REQUIRES_NEW` (§1.4)                                       | Real savepoints, retry disabled by default at savepoint level                 | Correctness — and `40001`/`40P01` abort the whole transaction anyway, so savepoint-level retry for them would be a lie |
+| ALS driver silently swallows out-of-context writes (§1.1)                           | Explicit `isInTransaction()` / `getTransactionContext()`, no silent no-op     | Silent failure is the worst failure mode in a correctness library                                                      |
+| 3 runtime dependencies                                                              | **Zero**                                                                      | Smaller install, no `cls-hooked` (which relies on `async_hooks` internals), no transitive CVE surface                  |
 
 ### Reject
 
-| Idea | Why not |
-|---|---|
-| Multi-ORM adapter layer (`nestjs-cls` style) | Declared non-goal. It costs the transparent-repository behaviour that makes migration one line |
-| Retrying `08xxx` connection errors by default | Unknown commit state → possible double-apply (§7) |
-| Per-query retry, as literally requested in #9806 | `40001` can surface at `COMMIT`; only whole-transaction retry is sound (§7) |
-| Savepoint-level retry for `40001` / `40P01` | Both abort the entire transaction in Postgres — rolling back to a savepoint cannot recover it |
-| Retry on inner (joined) `REQUIRED` methods | Only the transaction owner can retry; anything else silently does nothing. We **throw at bootstrap** instead |
-| Hard-throwing version guards | See §1.3 |
-| `cls-hooked` | Unmaintained, depends on `async_hooks` internals, and `AsyncLocalStorage` is built in on every Node version we support |
+| Idea                                             | Why not                                                                                                                |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Multi-ORM adapter layer (`nestjs-cls` style)     | Declared non-goal. It costs the transparent-repository behaviour that makes migration one line                         |
+| Retrying `08xxx` connection errors by default    | Unknown commit state → possible double-apply (§7)                                                                      |
+| Per-query retry, as literally requested in #9806 | `40001` can surface at `COMMIT`; only whole-transaction retry is sound (§7)                                            |
+| Savepoint-level retry for `40001` / `40P01`      | Both abort the entire transaction in Postgres — rolling back to a savepoint cannot recover it                          |
+| Retry on inner (joined) `REQUIRED` methods       | Only the transaction owner can retry; anything else silently does nothing. We **throw at bootstrap** instead           |
+| Hard-throwing version guards                     | See §1.3                                                                                                               |
+| `cls-hooked`                                     | Unmaintained, depends on `async_hooks` internals, and `AsyncLocalStorage` is built in on every Node version we support |
 
 ---
 
@@ -479,12 +497,12 @@ at 2am, and no existing package targets those strings.
 
 ## 10. Proposed ADRs
 
-| ADR | Decision |
-|---|---|
-| `0001-async-local-storage` | ALS over `cls-hooked`; why zero-dependency matters more than the ALS choice itself |
-| `0002-owner-only-retry` | Only the transaction owner retries; inner retry config throws at bootstrap |
-| `0003-nested-savepoint-deviation` | Real savepoints, deviating from `typeorm-transactional`; savepoint-level retry off by default |
-| `0004-typeorm-dual-version-support` | `^0.3.31 \|\| ^1` on a verified-identical patch surface |
-| `0005-no-connection-error-retry` | Unknown commit state; opt-in only |
-| `0006-behavioural-capability-detection` | No arity assertions; degrade with a warning |
-| `0007-full-jitter-default` | Jitter on by default, diverging from Spring; deadlocked peers are phase-locked |
+| ADR                                     | Decision                                                                                      |
+| --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `0001-async-local-storage`              | ALS over `cls-hooked`; why zero-dependency matters more than the ALS choice itself            |
+| `0002-owner-only-retry`                 | Only the transaction owner retries; inner retry config throws at bootstrap                    |
+| `0003-nested-savepoint-deviation`       | Real savepoints, deviating from `typeorm-transactional`; savepoint-level retry off by default |
+| `0004-typeorm-dual-version-support`     | `^0.3.31 \|\| ^1` on a verified-identical patch surface                                       |
+| `0005-no-connection-error-retry`        | Unknown commit state; opt-in only                                                             |
+| `0006-behavioural-capability-detection` | No arity assertions; degrade with a warning                                                   |
+| `0007-full-jitter-default`              | Jitter on by default, diverging from Spring; deadlocked peers are phase-locked                |
