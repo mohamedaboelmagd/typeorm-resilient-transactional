@@ -8,8 +8,13 @@ import {
 } from '../context/store.js';
 import { getDataSourceByName, isContextInitialized } from '../datasource/registry.js';
 import { warn } from '../diagnostics.js';
-import { ContextNotInitializedError, TransactionalError } from '../errors/index.js';
+import {
+  ContextNotInitializedError,
+  RetryNotPermittedError,
+  TransactionalError,
+} from '../errors/index.js';
 import { IsolationLevel, Propagation } from '../enums.js';
+import { resolveRetry, runWithRetry, type RetryConfig, type RetryInfo } from '../retry/engine.js';
 
 export interface TransactionOptions {
   /** Defaults to `REQUIRED`. */
@@ -27,6 +32,17 @@ export interface TransactionOptions {
   connectionName?: string;
   /** Method or operation name, used in diagnostics. */
   name?: string;
+  /**
+   * Retry policy. Omit or pass `false` to disable.
+   *
+   * Only valid where this call *owns* the transaction — see
+   * {@link RetryNotPermittedError}.
+   */
+  retry?: RetryConfig | false;
+  /** Wall-clock budget across every attempt, not per attempt. */
+  timeoutMs?: number;
+  onRetry?: (info: RetryInfo) => void;
+  onExhausted?: (info: RetryInfo) => void;
 }
 
 export type TransactionCallback<T> = (manager: EntityManager) => Promise<T> | T;
@@ -76,6 +92,7 @@ async function runAsOwner<T>(
   dataSourceName: string,
   isolation: IsolationLevel | undefined,
   fn: TransactionCallback<T>,
+  attempt: number,
 ): Promise<T> {
   const queryRunner = dataSource.createQueryRunner();
 
@@ -88,7 +105,7 @@ async function runAsOwner<T>(
       queryRunner,
       dataSourceName,
       isolation,
-      attempt: 1,
+      attempt,
       depth: 0,
       startedAt: Date.now(),
       isOwner: true,
@@ -188,6 +205,67 @@ function runSuspended<T>(
 }
 
 /**
+ * Runs an owned transaction, retrying transient failures when configured.
+ *
+ * Retry lives here rather than inside `runAsOwner` because each attempt needs a
+ * brand-new query runner and a fresh `START TRANSACTION`.
+ */
+function runOwned<T>(
+  dataSource: DataSource,
+  dataSourceName: string,
+  isolation: IsolationLevel | undefined,
+  fn: TransactionCallback<T>,
+  options: TransactionOptions | undefined,
+): Promise<T> {
+  const retry = resolveRetry(options?.retry);
+
+  if (retry === undefined) {
+    return runAsOwner(dataSource, dataSourceName, isolation, fn, 1);
+  }
+
+  return runWithRetry((attempt) => runAsOwner(dataSource, dataSourceName, isolation, fn, attempt), {
+    ...retry,
+    timeoutMs: options?.timeoutMs,
+    onRetry: options?.onRetry,
+    onExhausted: options?.onExhausted,
+    method: options?.name,
+    dataSourceName,
+  });
+}
+
+/**
+ * Rejects retry configured somewhere it could never take effect.
+ *
+ * Re-running a *joined* method would replay part of a transaction someone else
+ * owns; retrying to a savepoint cannot recover from `40001` or `40P01`, which
+ * abort the whole transaction in PostgreSQL. Both cases are silent no-ops in a
+ * naive implementation — and code that looks like it retries but does not is
+ * worse than code that plainly does not.
+ *
+ * This fires on the first call rather than at import time, because whether a
+ * method joins or owns is only knowable once it runs.
+ *
+ * @see docs/adr/0002-owner-only-retry.md
+ */
+function assertRetryPermitted(
+  options: TransactionOptions | undefined,
+  propagation: Propagation,
+  joining: boolean,
+): void {
+  if (!joining) return;
+  if (resolveRetry(options?.retry) === undefined) return;
+
+  const where = options?.name === undefined ? 'This method' : `"${options.name}"`;
+
+  throw new RetryNotPermittedError(
+    `${where} configures retry but does not own its transaction (propagation ` +
+      `${propagation}). Only the transaction owner can retry — move the retry ` +
+      'configuration to the outermost @Transactional(), or use REQUIRES_NEW so this ' +
+      'method owns a transaction of its own.',
+  );
+}
+
+/**
  * Runs `fn` in a transaction, honouring `propagation`.
  *
  * The programmatic entry point. `@Transactional()` is a thin wrapper over it.
@@ -205,18 +283,27 @@ export async function runInResilientTransaction<T>(
   const dataSource = getDataSourceByName(dataSourceName);
   const existing = getTransactionState(dataSourceName);
 
+  // Owning means opening a transaction of our own; everything else either joins
+  // one or runs without any, and neither can be retried.
+  const owns =
+    propagation === Propagation.REQUIRES_NEW ||
+    ((propagation === Propagation.REQUIRED || propagation === Propagation.NESTED) &&
+      existing === undefined);
+
+  assertRetryPermitted(options, propagation, !owns);
+
   switch (propagation) {
     case Propagation.REQUIRED:
       return existing === undefined
-        ? runAsOwner(dataSource, dataSourceName, isolation, fn)
+        ? runOwned(dataSource, dataSourceName, isolation, fn, options)
         : runJoined(existing, fn);
 
     case Propagation.REQUIRES_NEW:
-      return runAsOwner(dataSource, dataSourceName, isolation, fn);
+      return runOwned(dataSource, dataSourceName, isolation, fn, options);
 
     case Propagation.NESTED:
       return existing === undefined
-        ? runAsOwner(dataSource, dataSourceName, isolation, fn)
+        ? runOwned(dataSource, dataSourceName, isolation, fn, options)
         : runInSavepoint(existing, isolation, fn);
 
     case Propagation.SUPPORTS:

@@ -36,6 +36,23 @@ export {
   type TransactionContext,
 } from './core/context/index.js';
 
+// ── retry ────────────────────────────────────────────────────────────────────
+export {
+  DEFAULT_MAX_ATTEMPTS,
+  resolveRetry,
+  runWithRetry,
+  type ResolvedRetry,
+  type RetryConfig,
+  type RetryInfo,
+} from './core/retry/engine.js';
+export {
+  DEFAULT_BACKOFF,
+  computeBackoff,
+  type BackoffConfig,
+  type BackoffStrategy,
+} from './core/retry/backoff.js';
+export { extractSqlState, isRetryable, isUnsafeToRetry } from './core/retry/classifier.js';
+
 // ── configuration ────────────────────────────────────────────────────────────
 export { IsolationLevel, Propagation } from './core/enums.js';
 
@@ -53,6 +70,9 @@ export {
   ContextNotInitializedError,
   DataSourceNotRegisteredError,
   ResilientTransactionalError,
+  RetriesExhaustedError,
+  RetryNotPermittedError,
+  TransactionTimeoutError,
   TransactionalError,
 } from './core/errors/index.js';
 
