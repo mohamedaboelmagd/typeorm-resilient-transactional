@@ -13,7 +13,9 @@ export default defineConfig({
       {
         test: {
           name: 'integration',
-          include: ['test/integration/**/*.spec.ts'],
+          // The compat suite needs the same database and the same one-container
+          // global setup, so it rides in this project rather than starting a second.
+          include: ['test/integration/**/*.spec.ts', 'test/compat/**/*.spec.ts'],
           environment: 'node',
           globalSetup: ['test/integration/global-setup.ts'],
           // Pulling and starting a Postgres image is slow on a cold cache.

@@ -86,6 +86,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
+    "test:compat": "vitest run --project integration test/compat",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "size": "size-limit",
@@ -128,20 +129,9 @@
     "testcontainers": "^12.1.0",
     "tsup": "^8.5.1",
     "typeorm": "^1.1.0",
+    "typeorm-transactional": "0.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.10"
-  },
-  "size-limit": [
-    {
-      "name": "index (ESM, gzip)",
-      "path": "dist/index.mjs",
-      "limit": "12 kB"
-    },
-    {
-      "name": "index (CJS, gzip)",
-      "path": "dist/index.js",
-      "limit": "12 kB"
-    }
-  ]
+  }
 }

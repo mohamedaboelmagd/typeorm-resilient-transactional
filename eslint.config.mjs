@@ -19,6 +19,15 @@ export default defineConfig([
     },
   },
 
+  // Shipped code stays quiet unless a caller opts in. The one exception is the
+  // default diagnostic handler, which is replaceable via setDiagnosticHandler().
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-console': 'error',
+    },
+  },
+
   // ── The core/nestjs boundary ────────────────────────────────────────────────
   // src/core/ must stay framework-agnostic so that extracting it as a standalone
   // @resilient-tx/core package later is a file move, not a refactor. This rule is
@@ -47,11 +56,32 @@ export default defineConfig([
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
+      // Patch tests deliberately capture prototype methods unbound in order to
+      // stub and restore them.
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 
+  // `_name` is the conventional marker for a parameter that exists only to shape
+  // a signature — which is exactly what the arity-degradation stubs need.
   {
-    files: ['**/*.mjs'],
+    files: ['**/*.ts', '**/*.mts'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+
+  // Plain JS config files (.size-limit.js, eslint.config.mjs, scripts/*.mjs) are
+  // outside the TypeScript program, so type-aware rules cannot run on them.
+  {
+    files: ['**/*.mjs', '**/*.js'],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ...tseslint.configs.disableTypeChecked.languageOptions,
