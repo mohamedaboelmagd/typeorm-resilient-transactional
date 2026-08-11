@@ -4,7 +4,9 @@
  * `@Transactional()` for NestJS + TypeORM that survives deadlocks and
  * serialization failures.
  *
- * Phases 3–5 add the retry engine, lifecycle hooks, and lock-ordering helpers.
+ * Framework-agnostic. The NestJS module lives at
+ * `typeorm-resilient-transactional/nestjs`, so importing this root entry never
+ * requires `@nestjs/common`.
  */
 
 // ── bootstrap ────────────────────────────────────────────────────────────────
@@ -101,6 +103,25 @@ export {
   TransactionTimeoutError,
   TransactionalError,
 } from './core/errors/index.js';
+
+// ── configuration and observability ──────────────────────────────────────────
+export {
+  getResilientDefaults,
+  resetResilientDefaults,
+  resolveRetryConfig,
+  setResilientDefaults,
+  type ResilientDefaults,
+} from './core/config.js';
+
+export type { FailedTransactionOutcome, RetryMetrics, TransactionOutcome } from './core/metrics.js';
+
+export {
+  TELEMETRY_ATTRIBUTES,
+  annotateActiveSpan,
+  resetOtel,
+  setOtelApi,
+  whenTelemetryReady,
+} from './core/telemetry/otel.js';
 
 // ── diagnostics ──────────────────────────────────────────────────────────────
 export {

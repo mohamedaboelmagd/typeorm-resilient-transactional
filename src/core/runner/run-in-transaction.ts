@@ -6,9 +6,17 @@ import {
   runWithTransactionState,
   type TransactionState,
 } from '../context/store.js';
+import { getResilientDefaults, resolveRetryConfig } from '../config.js';
 import { getDataSourceByName, isContextInitialized } from '../datasource/registry.js';
 import { warn, warnOnce } from '../diagnostics.js';
 import { HookRegistry } from '../hooks/registry.js';
+import {
+  notifyCommit,
+  notifyExhausted,
+  notifyRetry,
+  notifyRollback,
+  type ObservabilityContext,
+} from '../observability.js';
 import {
   ContextNotInitializedError,
   RetryNotPermittedError,
@@ -231,37 +239,52 @@ async function runOwned<T>(
   fn: TransactionCallback<T>,
   options: TransactionOptions | undefined,
 ): Promise<T> {
-  const retry = resolveRetry(options?.retry);
+  const defaults = getResilientDefaults();
+  const retry = resolveRetry(resolveRetryConfig(options?.retry, defaults.retry));
+
+  const observability: ObservabilityContext = {
+    method: options?.name,
+    dataSourceName,
+    isolation,
+    startedAt: Date.now(),
+  };
 
   // Replaced on every attempt. That replacement *is* the discard: a hook
   // registered during an attempt that failed never reaches the next one.
   let hooks = new HookRegistry();
+  let attempts = 0;
 
   const attempt = (attemptNumber: number): Promise<T> => {
     hooks = new HookRegistry();
+    attempts = attemptNumber;
     return runAsOwner(dataSource, dataSourceName, isolation, fn, attemptNumber, hooks);
   };
 
   try {
-    if (retry === undefined) return await attempt(1);
+    const result =
+      retry === undefined
+        ? await attempt(1)
+        : await runWithRetry(attempt, {
+            ...retry,
+            timeoutMs: options?.timeoutMs ?? defaults.timeoutMs,
+            onRetry: (info) => {
+              warnOnRetry(info.method);
+              hooks.runRetry(info);
+              notifyRetry(info, options?.onRetry, isolation);
+            },
+            onExhausted: (info) => notifyExhausted(info, options?.onExhausted),
+            method: options?.name,
+            dataSourceName,
+          });
 
-    return await runWithRetry(attempt, {
-      ...retry,
-      timeoutMs: options?.timeoutMs,
-      onRetry: (info) => {
-        warnOnRetry(info.method);
-        hooks.runRetry(info);
-        options?.onRetry?.(info);
-      },
-      onExhausted: options?.onExhausted,
-      method: options?.name,
-      dataSourceName,
-    });
+    notifyCommit(observability, attempts);
+    return result;
   } catch (error) {
     // `runWithRetry` only throws once it has stopped retrying, so reaching here
     // means the transaction is finally abandoned — the one moment rollback hooks
     // should fire. Between attempts they are discarded, not run.
     await hooks.runRollback(error);
+    notifyRollback(observability, attempts, error);
     throw error;
   }
 }
@@ -330,7 +353,8 @@ export async function runInResilientTransaction<T>(
 
   const dataSourceName = resolveDataSourceName(options);
   const propagation = options?.propagation ?? Propagation.REQUIRED;
-  const isolation = options?.isolation ?? options?.isolationLevel;
+  const isolation =
+    options?.isolation ?? options?.isolationLevel ?? getResilientDefaults().defaultIsolation;
 
   const dataSource = getDataSourceByName(dataSourceName);
   const existing = getTransactionState(dataSourceName);
