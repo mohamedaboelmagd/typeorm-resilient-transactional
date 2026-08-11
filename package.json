@@ -1,0 +1,147 @@
+{
+  "name": "typeorm-resilient-transactional",
+  "version": "0.0.0",
+  "description": "@Transactional() for NestJS + TypeORM that survives deadlocks and serialization failures — so you can actually use SERIALIZABLE in production.",
+  "license": "MIT",
+  "author": "mohamed aboelmagd",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mohamedaboelmagd/typeorm-resilient-transactional.git"
+  },
+  "homepage": "https://github.com/mohamedaboelmagd/typeorm-resilient-transactional#readme",
+  "bugs": {
+    "url": "https://github.com/mohamedaboelmagd/typeorm-resilient-transactional/issues"
+  },
+  "keywords": [
+    "typeorm",
+    "nestjs",
+    "transaction",
+    "transactional",
+    "retry",
+    "deadlock",
+    "serializable",
+    "isolation-level",
+    "postgres",
+    "postgresql",
+    "concurrency",
+    "pessimistic-locking",
+    "async-local-storage",
+    "serialization-failure",
+    "40001",
+    "40P01",
+    "write-skew",
+    "sqlstate"
+  ],
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./compat": {
+      "import": {
+        "types": "./dist/compat.d.mts",
+        "default": "./dist/compat.mjs"
+      },
+      "require": {
+        "types": "./dist/compat.d.ts",
+        "default": "./dist/compat.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "compat": [
+        "./dist/compat.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "preflight": "node scripts/preflight.mjs",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "size": "size-limit",
+    "attw": "attw --pack .",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^10 || ^11",
+    "@opentelemetry/api": "^1",
+    "reflect-metadata": ">=0.1.13",
+    "typeorm": "^0.3.31 || ^1"
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "reflect-metadata": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^3.0.0",
+    "@eslint/js": "^10.0.1",
+    "@nestjs/common": "^11.1.29",
+    "@opentelemetry/api": "^1.9.1",
+    "@size-limit/preset-small-lib": "^13.0.3",
+    "@testcontainers/postgresql": "^12.1.0",
+    "@types/node": "^20",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.1",
+    "globals": "^17.9.0",
+    "pg": "^8.23.0",
+    "prettier": "^3.9.6",
+    "reflect-metadata": "^0.2.2",
+    "size-limit": "^13.0.3",
+    "testcontainers": "^12.1.0",
+    "tsup": "^8.5.1",
+    "typeorm": "^1.1.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  },
+  "size-limit": [
+    {
+      "name": "index (ESM, gzip)",
+      "path": "dist/index.mjs",
+      "limit": "12 kB"
+    },
+    {
+      "name": "index (CJS, gzip)",
+      "path": "dist/index.js",
+      "limit": "12 kB"
+    }
+  ]
+}
