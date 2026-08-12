@@ -3,6 +3,10 @@ name: Release
 on:
   push:
     branches: [master, main]
+  # Re-open the version PR, or retry a publish, without needing a dummy commit —
+  # the first attempt at 0.1.1 failed on a repository setting rather than on
+  # anything in the tree.
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
