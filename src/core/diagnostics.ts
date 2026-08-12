@@ -26,8 +26,34 @@ export function setDiagnosticHandler(next: DiagnosticHandler | undefined): void 
   handler = next ?? defaultHandler;
 }
 
+/**
+ * Emits an event, absorbing anything the handler does about it.
+ *
+ * This is the channel every other failure is reported through, which makes it the
+ * one callback that must not be able to create a failure of its own. A handler
+ * that throws would otherwise surface from whatever library code happened to be
+ * warning at the time — including from inside the `catch` that was already
+ * handling something else.
+ *
+ * Rejections are absorbed for the same reason `runGuarded` absorbs them: users
+ * are pointed at a NestJS `Logger` or pino, and `setDiagnosticHandler(async (e) =>
+ * log.send(e))` type-checks, so a logging outage would otherwise take the process
+ * down through an unhandled rejection.
+ *
+ * Nothing is reported when it fails. There is nowhere left to report it to — the
+ * only channel out is the handler that just failed, and calling it again would
+ * recurse.
+ */
 export function emitDiagnostic(event: DiagnosticEvent): void {
-  handler(event);
+  try {
+    const result: unknown = handler(event);
+
+    if (typeof (result as { then?: unknown } | null)?.then === 'function') {
+      (result as PromiseLike<unknown>).then(undefined, () => undefined);
+    }
+  } catch {
+    /* see above: there is no second channel to report a broken first one on */
+  }
 }
 
 export function warn(code: string, message: string): void {

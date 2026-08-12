@@ -56,6 +56,51 @@ describe('diagnostic routing', () => {
   });
 });
 
+/**
+ * The handler is what reports every other failure, so it is the one callback that
+ * must not be able to create one. Users are pointed at a NestJS `Logger` or pino,
+ * and `setDiagnosticHandler(async (e) => log.send(e))` is an easy thing to write —
+ * `DiagnosticHandler` returns `void`, and TypeScript accepts an async function
+ * there without complaint.
+ *
+ * Nothing is reported when it fails: telling the user would mean calling the
+ * handler that just failed.
+ */
+describe('a handler that fails cannot break the caller', () => {
+  it('contains a handler that throws', () => {
+    setDiagnosticHandler(() => {
+      throw new Error('log pipeline down');
+    });
+
+    expect(() => warn('some-code', 'something happened')).not.toThrow();
+  });
+
+  it('contains a handler that rejects', async () => {
+    setDiagnosticHandler(
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      () => Promise.reject(new Error('log pipeline down')),
+    );
+
+    expect(() => warn('some-code', 'something happened')).not.toThrow();
+
+    // An escaped rejection fails this file on the next tick.
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+
+  it('keeps working after a handler failed', () => {
+    let calls = 0;
+    setDiagnosticHandler(() => {
+      calls += 1;
+      throw new Error('still down');
+    });
+
+    warn('first', 'one');
+    warn('second', 'two');
+
+    expect(calls, 'a failure must not disable diagnostics').toBe(2);
+  });
+});
+
 describe('warnOnce', () => {
   // Patch-degradation notices are emitted from hot paths. Repeating them per call
   // site would bury the one message that matters.
