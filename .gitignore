@@ -1,0 +1,21 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+.env
+.env.local
+
+.DS_Store
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# docs site build output
+docs-site/dist/
+docs-site/.astro/
+docs-site/src/content/docs/

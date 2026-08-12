@@ -1,0 +1,142 @@
+/**
+ * typeorm-resilient-transactional
+ *
+ * `@Transactional()` for NestJS + TypeORM that survives deadlocks and
+ * serialization failures.
+ *
+ * Framework-agnostic. The NestJS module lives at
+ * `typeorm-resilient-transactional/nestjs`, so importing this root entry never
+ * requires `@nestjs/common`.
+ */
+
+// ── bootstrap ────────────────────────────────────────────────────────────────
+export {
+  addResilientDataSource,
+  clearResilientDataSources,
+  deleteDataSourceByName,
+  getDataSourceByName,
+  hasDataSource,
+  initializeResilientContext,
+  isContextInitialized,
+  type AddResilientDataSourceInput,
+} from './core/datasource/registry.js';
+
+// ── running transactions ─────────────────────────────────────────────────────
+export { Transactional } from './core/decorator.js';
+export {
+  runInResilientTransaction,
+  type TransactionCallback,
+  type TransactionOptions,
+} from './core/runner/run-in-transaction.js';
+export { wrapInResilientTransaction } from './core/runner/wrap-in-transaction.js';
+
+// ── lifecycle hooks ──────────────────────────────────────────────────────────
+export {
+  NoActiveTransactionError,
+  runOnCommit,
+  runOnComplete,
+  runOnRetry,
+  runOnRollback,
+  runOnTransactionCommit,
+  runOnTransactionComplete,
+  runOnTransactionRollback,
+  type CommitHook,
+  type CompleteHook,
+  type RetryHook,
+  type RollbackHook,
+} from './core/hooks/index.js';
+
+// ── locking ──────────────────────────────────────────────────────────────────
+export {
+  lockRowsInOrder,
+  withLockTimeout,
+  withStatementTimeout,
+  type LockMode,
+  type LockRowsInOrderOptions,
+  type LockStrategy,
+} from './core/locking/index.js';
+
+// ── introspection ────────────────────────────────────────────────────────────
+export {
+  currentAttempt,
+  getTransactionContext,
+  isInTransaction,
+  type TransactionContext,
+} from './core/context/index.js';
+
+// ── retry ────────────────────────────────────────────────────────────────────
+export {
+  DEFAULT_MAX_ATTEMPTS,
+  resolveRetry,
+  runWithRetry,
+  type ResolvedRetry,
+  type RetryConfig,
+  type RetryInfo,
+} from './core/retry/engine.js';
+export {
+  DEFAULT_BACKOFF,
+  computeBackoff,
+  type BackoffConfig,
+  type BackoffStrategy,
+} from './core/retry/backoff.js';
+export { extractSqlState, isRetryable, isUnsafeToRetry } from './core/retry/classifier.js';
+
+// ── configuration ────────────────────────────────────────────────────────────
+export { IsolationLevel, Propagation } from './core/enums.js';
+
+export {
+  DEADLOCK_DETECTED,
+  DEFAULT_RETRYABLE_SQLSTATES,
+  LOCK_NOT_AVAILABLE,
+  QUERY_CANCELED,
+  SERIALIZATION_FAILURE,
+  UNSAFE_TO_RETRY_SQLSTATES,
+} from './core/dialects/postgres.js';
+
+// ── errors ───────────────────────────────────────────────────────────────────
+export {
+  ContextNotInitializedError,
+  DataSourceNotRegisteredError,
+  ResilientTransactionalError,
+  RetriesExhaustedError,
+  RetryNotPermittedError,
+  TransactionTimeoutError,
+  TransactionalError,
+} from './core/errors/index.js';
+
+// ── configuration and observability ──────────────────────────────────────────
+export {
+  getResilientDefaults,
+  resetResilientDefaults,
+  resolveRetryConfig,
+  setResilientDefaults,
+  type ResilientDefaults,
+} from './core/config.js';
+
+export type { FailedTransactionOutcome, RetryMetrics, TransactionOutcome } from './core/metrics.js';
+
+export {
+  TELEMETRY_ATTRIBUTES,
+  annotateActiveSpan,
+  resetOtel,
+  setOtelApi,
+  whenTelemetryReady,
+} from './core/telemetry/otel.js';
+
+// ── diagnostics ──────────────────────────────────────────────────────────────
+export {
+  setDiagnosticHandler,
+  type DiagnosticEvent,
+  type DiagnosticHandler,
+  type DiagnosticLevel,
+} from './core/diagnostics.js';
+
+// ── typeorm-transactional compatibility ──────────────────────────────────────
+// Also available from the `/compat` subpath. Exported here so migrating is a
+// one-line import change. @see MIGRATION.md
+export {
+  addTransactionalDataSource,
+  initializeTransactionalContext,
+  runInTransaction,
+  wrapInTransaction,
+} from './compat/index.js';

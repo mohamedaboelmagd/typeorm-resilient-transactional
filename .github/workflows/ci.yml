@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Testcontainers pulls images itself; skip the redundant Ryuk warning noise.
+  TESTCONTAINERS_RYUK_DISABLED: 'false'
+
+jobs:
+  static:
+    name: lint · typecheck · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm size
+      # Verifies the exports map resolves correctly for both ESM and CJS consumers.
+      - run: pnpm attw
+      # Installs the packed tarball into a throwaway project and checks it works
+      # from the outside. In-repo tests share one module graph and cannot catch
+      # cross-entry-point problems; this can.
+      - run: pnpm verify:package
+
+      # Handed to the node20-runtime job, which must not have pnpm on PATH.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 1
+
+  # The examples are workspace members, so this fails the build if the published
+  # API drifts from what the README and example show.
+  examples:
+    name: examples typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm -r --filter './examples/*' typecheck
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Production install has no dependencies at all, so this is about the
+      # toolchain rather than anything we ship.
+      - run: pnpm audit --audit-level high
+
+  unit:
+    name: unit · node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 20 is deliberately absent: pnpm 11 requires Node >= 22.13, so the
+        # toolchain cannot run there even though the library can. The
+        # `node20-runtime` job below tests what we actually claim — that the
+        # *shipped artifact* works on our minimum supported runtime.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:unit
+
+  # `engines.node` says >= 20. This is what makes that an honest claim: take the
+  # artifact built by `static`, and load it on Node 20.
+  #
+  # pnpm is deliberately absent from this job — pnpm 11 needs Node >= 22.13 and
+  # fails on `node:sqlite`, which is a fact about the toolchain, not the library.
+  node20-runtime:
+    name: node 20 runtime compatibility
+    needs: static
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      # A container rather than setup-node: setup-node reads the `packageManager`
+      # field and insists on a pnpm binary, which is the one thing that must not
+      # be here. This gets a clean Node 20 with nothing else on PATH.
+      # The peers have to be present: the library imports `typeorm` at module load,
+      # so nothing can be checked without it. Installed inside the container so
+      # this job never needs a package manager on the runner itself.
+      - name: Load the built package on Node 20
+        run: |
+          docker run --rm -v "$PWD":/work -w /work node:20-alpine sh -c '
+            npm install --no-audit --no-fund --no-save --silent typeorm@1 reflect-metadata &&
+            node scripts/check-node20.mjs
+          '
+
+  integration:
+    name: integration · pg ${{ matrix.postgres }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [14, 15, 16, 17]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:integration
+        env:
+          PG_IMAGE: postgres:${{ matrix.postgres }}-alpine
+
+  # TypeORM 0.3.x is tagged `legacy` upstream but still actively released, and it is
+  # what most of the typeorm-transactional install base is on. The patch surface we
+  # depend on is identical across both lines (docs/prior-art.md §1.2) — this job is
+  # what proves that claim stays true.
+  typeorm-compat:
+    name: integration · typeorm ${{ matrix.typeorm }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        typeorm: ['0.3.31', '1.1.0']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm add -Dw typeorm@${{ matrix.typeorm }}
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Threshold is enforced in vitest.config.mts: 90% on src/core/.
+      - run: pnpm coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/

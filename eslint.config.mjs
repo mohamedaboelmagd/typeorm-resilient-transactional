@@ -1,0 +1,107 @@
+import { defineConfig, globalIgnores } from 'eslint/config';
+import js from '@eslint/js';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
+
+export default defineConfig([
+  globalIgnores([
+    'dist/**',
+    'node_modules/**',
+    'coverage/**',
+    // Workspace members with their own toolchains and tsconfigs. The examples are
+    // typechecked in CI by `pnpm -r --filter './examples/*' typecheck`; the docs
+    // site is generated output plus Astro config.
+    'examples/**',
+    'docs-site/**',
+  ]),
+
+  js.configs.recommended,
+  tseslint.configs.recommendedTypeChecked,
+
+  {
+    files: ['**/*.ts', '**/*.mts'],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+
+  // Shipped code stays quiet unless a caller opts in. The one exception is the
+  // default diagnostic handler, which is replaceable via setDiagnosticHandler().
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-console': 'error',
+    },
+  },
+
+  // ── The core/nestjs boundary ────────────────────────────────────────────────
+  // src/core/ must stay framework-agnostic so that extracting it as a standalone
+  // @resilient-tx/core package later is a file move, not a refactor. This rule is
+  // the enforcement — see docs/adr/0001-async-local-storage.md.
+  {
+    files: ['src/core/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@nestjs/*', '@nestjs/**'],
+              message:
+                'src/core/ must not import from @nestjs/*. Framework glue belongs in src/nestjs/.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    files: [
+      'test/**/*.ts',
+      'benchmarks/**/*.ts',
+      'scripts/**/*.mjs',
+      '*.config.ts',
+      '*.config.mts',
+      '*.config.mjs',
+    ],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      // Patch tests deliberately capture prototype methods unbound in order to
+      // stub and restore them.
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
+
+  // `_name` is the conventional marker for a parameter that exists only to shape
+  // a signature — which is exactly what the arity-degradation stubs need.
+  {
+    files: ['**/*.ts', '**/*.mts'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+
+  // Plain JS config files (.size-limit.js, eslint.config.mjs, scripts/*.mjs) are
+  // outside the TypeScript program, so type-aware rules cannot run on them.
+  {
+    files: ['**/*.mjs', '**/*.js'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: globals.node,
+    },
+  },
+]);

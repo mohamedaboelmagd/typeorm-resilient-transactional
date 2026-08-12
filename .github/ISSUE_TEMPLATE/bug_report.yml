@@ -1,0 +1,54 @@
+name: Bug report
+description: Something behaves differently from what the docs say
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Concurrency bugs are hard to reproduce from prose. If you can, a failing test using the
+        barrier harness in `test/integration/harness/` is worth more than any description.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Smallest code that shows it. Include the `@Transactional()` options.
+      render: ts
+    validations:
+      required: true
+
+  - type: input
+    id: sqlstate
+    attributes:
+      label: SQLSTATE
+      description: If a database error was involved, its code — `40001`, `40P01`, `55P03`, …
+      placeholder: '40001'
+
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      value: |
+        - typeorm-resilient-transactional:
+        - typeorm:
+        - @nestjs/common (if used):
+        - PostgreSQL:
+        - Node:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before filing
+      options:
+        - label: I read [docs/safety.md](../../docs/safety.md) — retry re-runs the whole method body
+        - label: My retry config is on the method that *owns* the transaction, not one that joins it

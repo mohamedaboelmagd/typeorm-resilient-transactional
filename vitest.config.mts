@@ -1,0 +1,57 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    projects: [
+      {
+        test: {
+          name: 'unit',
+          include: ['test/unit/**/*.spec.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
+          name: 'integration',
+          // The compat suite needs the same database and the same one-container
+          // global setup, so it rides in this project rather than starting a second.
+          include: ['test/integration/**/*.spec.ts', 'test/compat/**/*.spec.ts'],
+          environment: 'node',
+          globalSetup: ['test/integration/global-setup.ts'],
+          // Pulling and starting a Postgres image is slow on a cold cache.
+          testTimeout: 60_000,
+          hookTimeout: 120_000,
+          // Deadlock and serialization tests coordinate two sessions against
+          // shared rows. Running files in parallel against one database would
+          // make them interfere; the barriers only order sessions within a file.
+          fileParallelism: false,
+        },
+      },
+      {
+        test: {
+          name: 'bench',
+          include: ['benchmarks/**/*.bench.ts'],
+          environment: 'node',
+          globalSetup: ['test/integration/global-setup.ts'],
+          // Long by design: the matrix runs thousands of contended transactions.
+          testTimeout: 600_000,
+          hookTimeout: 120_000,
+          fileParallelism: false,
+          // Sequential, so one configuration never competes with another for the
+          // database it is measuring.
+          maxConcurrency: 1,
+        },
+      },
+    ],
+    coverage: {
+      provider: 'v8',
+      include: ['src/core/**'],
+      thresholds: {
+        lines: 90,
+        functions: 90,
+        branches: 90,
+        statements: 90,
+      },
+    },
+  },
+});

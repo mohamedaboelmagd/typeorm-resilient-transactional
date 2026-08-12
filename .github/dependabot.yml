@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the toolchain rather than a dozen; these move together and
+      # the CI matrix is what actually validates them.
+      dev-tooling:
+        patterns:
+          - '@types/*'
+          - 'eslint*'
+          - '@eslint/*'
+          - 'typescript-eslint'
+          - 'prettier'
+          - 'vitest'
+          - '@vitest/*'
+          - 'tsup'
+          - 'size-limit'
+          - '@size-limit/*'
+    ignore:
+      # Peer dependency ranges are a deliberate support decision, not something
+      # to bump automatically — widening or narrowing them needs an ADR.
+      - dependency-name: typeorm
+      - dependency-name: '@nestjs/common'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

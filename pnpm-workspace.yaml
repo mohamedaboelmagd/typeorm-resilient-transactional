@@ -1,0 +1,31 @@
+packages:
+  - '.'
+  - 'examples/*'
+  - 'docs-site'
+allowBuilds:
+  # Required: tsup and vitest both need the platform esbuild binary linked.
+  esbuild: true
+  # Optional native accelerators pulled in transitively by testcontainers.
+  # Not needed — testcontainers talks to the local daemon over a unix socket.
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
+minimumReleaseAgeExclude:
+  - '@changesets/apply-release-plan@8.0.0'
+  - '@changesets/assemble-release-plan@7.0.0'
+  - '@changesets/changelog-git@1.0.0'
+  - '@changesets/cli@3.0.0'
+  - '@changesets/config@4.0.0'
+  - '@changesets/errors@1.0.0'
+  - '@changesets/get-dependents-graph@3.0.0'
+  - '@changesets/git@4.0.0'
+  - '@changesets/parse@1.0.0'
+  - '@changesets/pre@3.0.0'
+  - '@changesets/read@1.0.0'
+  - '@changesets/should-skip-package@1.0.0'
+  - '@changesets/types@7.0.0'
+  - '@changesets/write@1.0.0'
+  - astro@7.2.1
+
+# Examples are workspace members so CI typechecks them against the real source.
+# A README snippet that stops compiling breaks the build.

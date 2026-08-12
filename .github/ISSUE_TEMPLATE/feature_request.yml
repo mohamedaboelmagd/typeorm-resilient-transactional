@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest something the library should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth checking the [non-goals](../../README.md#non-goals) first — some things are
+        deliberately out of scope.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that is awkward or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: API sketch welcome.
+      render: ts
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Workarounds, and why they fall short.
+
+  - type: dropdown
+    id: dialect
+    attributes:
+      label: Database
+      options: [PostgreSQL, MySQL / MariaDB, SQL Server, Other]
