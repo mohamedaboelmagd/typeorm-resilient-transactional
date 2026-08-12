@@ -3,6 +3,7 @@ import type { EntityManager, QueryRunner } from 'typeorm';
 
 import type { IsolationLevel } from '../enums.js';
 import type { HookRegistry } from '../hooks/registry.js';
+import { sharedState } from '../shared-state.js';
 
 export const DEFAULT_DATA_SOURCE_NAME = 'default';
 
@@ -44,7 +45,12 @@ export interface TransactionState {
  */
 type Store = ReadonlyMap<string, TransactionState>;
 
-const storage = new AsyncLocalStorage<Store>();
+/**
+ * Shared across duplicate module copies — a second `AsyncLocalStorage` would mean
+ * a transaction opened by one entry point is invisible to another.
+ * @see ../shared-state.ts
+ */
+const storage = sharedState('als', () => new AsyncLocalStorage<Store>());
 
 const EMPTY: Store = new Map();
 

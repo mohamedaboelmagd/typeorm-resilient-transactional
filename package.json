@@ -90,6 +90,7 @@
   "packageManager": "pnpm@11.21.0",
   "scripts": {
     "preflight": "node scripts/preflight.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

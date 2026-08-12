@@ -2,6 +2,7 @@ import type { DataSource } from 'typeorm';
 
 import { DEFAULT_DATA_SOURCE_NAME } from '../context/store.js';
 import { DataSourceNotRegisteredError, ResilientTransactionalError } from '../errors/index.js';
+import { sharedState } from '../shared-state.js';
 import { patchDataSource, patchRepositoryPrototype } from './patch.js';
 
 export interface AddResilientDataSourceInput {
@@ -19,9 +20,13 @@ export interface AddResilientDataSourceInput {
   patch?: boolean;
 }
 
-const dataSources = new Map<string, DataSource>();
-
-let contextInitialized = false;
+/**
+ * Both shared across duplicate module copies. The flag lives in a box rather than
+ * a module variable so a change made through one copy is visible to the others.
+ * @see ../shared-state.ts
+ */
+const dataSources = sharedState('dataSources', () => new Map<string, DataSource>());
+const flags = sharedState('flags', () => ({ contextInitialized: false }));
 
 /**
  * Installs the transactional context.
@@ -30,14 +35,14 @@ let contextInitialized = false;
  * Safe to call more than once — later calls are no-ops.
  */
 export function initializeResilientContext(): void {
-  if (contextInitialized) return;
+  if (flags.contextInitialized) return;
 
   patchRepositoryPrototype();
-  contextInitialized = true;
+  flags.contextInitialized = true;
 }
 
 export function isContextInitialized(): boolean {
-  return contextInitialized;
+  return flags.contextInitialized;
 }
 
 /**

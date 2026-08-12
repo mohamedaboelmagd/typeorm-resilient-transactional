@@ -32,6 +32,41 @@ jobs:
       - run: pnpm size
       # Verifies the exports map resolves correctly for both ESM and CJS consumers.
       - run: pnpm attw
+      # Installs the packed tarball into a throwaway project and checks it works
+      # from the outside. In-repo tests share one module graph and cannot catch
+      # cross-entry-point problems; this can.
+      - run: pnpm verify:package
+
+  # The examples are workspace members, so this fails the build if the published
+  # API drifts from what the README and example show.
+  examples:
+    name: examples typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm -r --filter './examples/*' typecheck
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Production install has no dependencies at all, so this is about the
+      # toolchain rather than anything we ship.
+      - run: pnpm audit --audit-level high
 
   unit:
     name: unit · node ${{ matrix.node }}

@@ -1,6 +1,7 @@
 import type { IsolationLevel } from './enums.js';
 import type { FailedTransactionOutcome, RetryMetrics, TransactionOutcome } from './metrics.js';
 import type { RetryConfig, RetryInfo } from './retry/engine.js';
+import { sharedState } from './shared-state.js';
 
 /**
  * Application-wide defaults, set once at bootstrap.
@@ -30,20 +31,25 @@ export interface ResilientDefaults {
   telemetry?: boolean;
 }
 
-let defaults: ResilientDefaults = {};
+/**
+ * Boxed and shared across duplicate module copies, so `forRoot()` imported from
+ * `/nestjs` configures the same defaults that `@Transactional()` imported from the
+ * package root reads. @see ./shared-state.ts
+ */
+const box = sharedState<{ defaults: ResilientDefaults }>('config', () => ({ defaults: {} }));
 
 /** Replaces the application-wide defaults. Called by the NestJS module. */
 export function setResilientDefaults(next: ResilientDefaults): void {
-  defaults = { ...next };
+  box.defaults = { ...next };
 }
 
 export function getResilientDefaults(): ResilientDefaults {
-  return defaults;
+  return box.defaults;
 }
 
 /** Test seam. */
 export function resetResilientDefaults(): void {
-  defaults = {};
+  box.defaults = {};
 }
 
 /**
