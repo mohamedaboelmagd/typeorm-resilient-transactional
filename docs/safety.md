@@ -262,8 +262,34 @@ wake together, and deadlock again. See [ADR 0007](adr/0007-full-jitter-default.m
 - consider whether `READ COMMITTED` with explicit locking fits the workload better than
   `SERIALIZABLE`
 
-> Measured throughput, latency, and retry-rate numbers across concurrency levels are **TBD** until
-> the Phase 7 benchmarks are run. This page will not carry numbers that were not measured.
+### This is measured, not asserted
+
+From [`benchmarks/RESULTS.md`](../benchmarks/RESULTS.md), 600 contended transfers per
+configuration against a containerised PostgreSQL 17:
+
+| 100 concurrent workers            | Unretried SERIALIZABLE |     + retry | READ COMMITTED + ordered locks |
+| --------------------------------- | ---------------------: | ----------: | -----------------------------: |
+| **1,000 accounts** — failure rate |                    87% |      **0%** |                             0% |
+| **1,000 accounts** — throughput   |              109 ops/s | 109.8 ops/s |                      382 ops/s |
+| **10 accounts** — failure rate    |                    96% |         49% |                             0% |
+| **10 accounts** — throughput      |              6.3 ops/s |   6.6 ops/s |                    101.7 ops/s |
+
+Two things to take from that.
+
+**Retry does what it claims.** At realistic contention it turns an 87% failure rate into
+zero. That is the difference between SERIALIZABLE being unusable and usable.
+
+**Retry does not make anything faster.** Under pathological contention its throughput
+_falls_ as workers are added — 77.6 ops/s at concurrency 1 down to 6.6 at concurrency 100 —
+because every conflict throws away a whole transaction's work. Ordered pessimistic locking
+was faster at every concurrency level we measured, in both profiles.
+
+So: reach for SERIALIZABLE + retry when you need a correctness property only
+serializability gives you — write skew across rows you cannot name in advance. Reach for
+[`lockRowsInOrder()`](lock-ordering.md) when you _can_ name the rows. This library ships
+both because neither is the right answer everywhere.
+
+Numbers vary by machine; re-run `pnpm bench` on yours before quoting them.
 
 ---
 
