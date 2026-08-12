@@ -18,7 +18,9 @@ jobs:
     permissions:
       contents: write # create the release PR and tags
       pull-requests: write
-      id-token: write # required for npm provenance
+      # Mints the OIDC token that npm trusted publishing exchanges for a
+      # short-lived credential, and that provenance is signed against.
+      id-token: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -40,18 +42,22 @@ jobs:
       - run: pnpm build
       - run: pnpm attw
 
-      # An unset token authenticates as nobody and npm reports it as a 403 about
-      # two-factor authentication, which sends you looking in the wrong place.
-      - name: Check the npm token is present
+      # Two ways to authenticate, and which one is in play decides how to read a
+      # failure. Trusted publishing is preferred: it needs no long-lived secret
+      # and npm attaches provenance automatically. A token still works, and both
+      # may be configured at once, so this reports rather than blocks.
+      - name: Report how this run will authenticate to npm
         env:
           TOKEN: ${{ secrets.NPM_TOKEN_CI || secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::error::Neither NPM_TOKEN_CI nor NPM_TOKEN is set. Add a repository secret" \
-                 "containing an npm *Automation* token (classic), which bypasses 2FA for CI."
-            exit 1
+          if [ -n "$TOKEN" ]; then
+            echo "npm token present (${#TOKEN} characters) — usable as a fallback."
+          else
+            echo "No npm token set. This run must authenticate by trusted publishing."
           fi
-          echo "npm token present (${#TOKEN} characters)."
+          echo "OIDC is attempted first and takes precedence over any token."
+          echo "If publish fails with 404 or 403, check that npmjs.com lists a trusted"
+          echo "publisher for this package pointing at ${{ github.repository }} and release.yml."
 
       - name: Create release PR or publish
         uses: changesets/action@v1
@@ -62,9 +68,16 @@ jobs:
           title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Accepts either secret name, so renaming one does not silently publish
-          # with an empty token — which fails as a confusing 403, not as "unset".
+          # Fallback only. pnpm tries OIDC first and it wins when npmjs.com has a
+          # trusted publisher configured for this package; the token covers the
+          # case where it does not, so enabling trusted publishing cannot strand a
+          # release. Accepts either secret name, because renaming one previously
+          # published with an empty token and failed as a confusing 403.
+          #
+          # Once a release has published by OIDC, delete both secrets and set
+          # npmjs.com → Settings → Publishing access to disallow tokens.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_CI || secrets.NPM_TOKEN }}
-          # Signs the published tarball with a link back to this workflow run,
-          # so consumers can verify where it was built.
+          # Redundant under trusted publishing, which attaches provenance on its
+          # own, but it is what produces provenance on the token path — and 0.1.0
+          # shipped without any, because automation tokens carry no OIDC identity.
           NPM_CONFIG_PROVENANCE: 'true'

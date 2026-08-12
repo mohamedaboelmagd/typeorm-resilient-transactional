@@ -65,7 +65,34 @@ Conventional commits. Add a changeset for anything user-visible:
 pnpm changeset
 ```
 
-Releases are automated — merging the version PR publishes with npm provenance.
+Releases are automated. Pushing a changeset to `master` opens a "chore: version packages" PR that
+collects the pending changesets; merging that PR publishes to npm.
+
+### Authenticating to npm
+
+The release workflow prefers [trusted publishing](https://docs.npmjs.com/trusted-publishers/): GitHub
+mints a short-lived OIDC token, npm exchanges it, and provenance is attached automatically. No
+long-lived secret is involved, which is why 0.1.0 shipped without provenance — an automation token
+carries no OIDC identity to sign against.
+
+Enabling it is a one-time change on npmjs.com, not in this repo — go to the package's
+**Settings → Trusted Publisher**, choose GitHub Actions, and enter:
+
+| Field                | Value                             |
+| -------------------- | --------------------------------- |
+| Organization or user | `mohamedaboelmagd`                |
+| Repository           | `typeorm-resilient-transactional` |
+| Workflow filename    | `release.yml`                     |
+| Environment          | leave empty                       |
+
+An `NPM_TOKEN_CI` / `NPM_TOKEN` secret still works and stays in place as a fallback, so turning
+trusted publishing on cannot strand a release. Once a release has published over OIDC, delete the
+secrets and set **Settings → Publishing access** to disallow tokens.
+
+`pnpm` must be at least 11.1.3: `actions/setup-node` writes `_authToken=${NODE_AUTH_TOKEN}` into
+`.npmrc` unconditionally, and older versions sent that literal placeholder as a bearer token when the
+variable was unset, which surfaced as a 404 ([pnpm#11513](https://github.com/pnpm/pnpm/issues/11513)).
+`packageManager` pins a version well past that floor.
 
 ## Code of conduct
 
