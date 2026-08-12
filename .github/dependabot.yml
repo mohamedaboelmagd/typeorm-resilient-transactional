@@ -26,6 +26,19 @@ updates:
       - dependency-name: typeorm
       - dependency-name: '@nestjs/common'
 
+      # Pinned to `~5.9.3` on purpose: typescript-eslint declares
+      # `typescript >=4.8.4 <6.1.0`, and TypeScript 6 breaks this codebase's
+      # strict config today. A major is a project decision, not a bump.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+
+      # Pinned to the *minimum* supported runtime, not the newest. With
+      # @types/node 26, using a Node 22+ API (`node:sqlite`, `util.styleText`)
+      # typechecks cleanly and then crashes on Node 20 — which `engines.node`
+      # says we support. The old types are the guardrail.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
