@@ -1,6 +1,6 @@
 {
   "name": "typeorm-resilient-transactional",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "@Transactional() for NestJS + TypeORM that survives deadlocks and serialization failures — so you can actually use SERIALIZABLE in production.",
   "license": "MIT",
   "author": "mohamed aboelmagd",
