@@ -27,6 +27,21 @@ export default defineConfig({
           fileParallelism: false,
         },
       },
+      {
+        test: {
+          name: 'bench',
+          include: ['benchmarks/**/*.bench.ts'],
+          environment: 'node',
+          globalSetup: ['test/integration/global-setup.ts'],
+          // Long by design: the matrix runs thousands of contended transactions.
+          testTimeout: 600_000,
+          hookTimeout: 120_000,
+          fileParallelism: false,
+          // Sequential, so one configuration never competes with another for the
+          // database it is measuring.
+          maxConcurrency: 1,
+        },
+      },
     ],
     coverage: {
       provider: 'v8',

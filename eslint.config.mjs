@@ -51,7 +51,14 @@ export default defineConfig([
   },
 
   {
-    files: ['test/**/*.ts', 'scripts/**/*.mjs', '*.config.ts', '*.config.mts', '*.config.mjs'],
+    files: [
+      'test/**/*.ts',
+      'benchmarks/**/*.ts',
+      'scripts/**/*.mjs',
+      '*.config.ts',
+      '*.config.mts',
+      '*.config.mjs',
+    ],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
