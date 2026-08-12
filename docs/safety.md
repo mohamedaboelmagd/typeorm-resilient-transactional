@@ -16,9 +16,10 @@ Read §1 even if you read nothing else.
 
 ## 1. Retry re-runs the whole method body
 
-PostgreSQL raises `40001` at **`COMMIT`**, not at the statement that caused it. By the time the
-conflict is detected, every statement in your method has already appeared to succeed. There is
-nothing to retry but the whole thing.
+PostgreSQL raises `40001` whenever its serializable-snapshot machinery notices the conflict — which
+may be at the offending statement, or deferred to **`COMMIT`** once everything has already appeared
+to succeed. Both happen; neither is predictable. Either way the entire transaction is aborted, so
+there is nothing to retry but the whole thing.
 
 So this method sends two emails when it retries once:
 

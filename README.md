@@ -24,9 +24,10 @@ async transfer(from: string, to: string, amount: number) {
 // 💥 QueryFailedError: could not serialize access due to read/write dependencies
 ```
 
-PostgreSQL raises `40001` at **`COMMIT`** — after every statement has already appeared to succeed.
-Under 100 concurrent workers, [we measured](benchmarks/RESULTS.md) **87% of these transactions
-failing**. That is why teams quietly drop back to `READ COMMITTED` and ship write-skew bugs.
+PostgreSQL can raise `40001` at the conflicting statement **or at `COMMIT`**, after everything has
+already appeared to succeed — so there is no single statement you could usefully re-issue. Under 100
+concurrent workers, [we measured](benchmarks/RESULTS.md) **87% of these transactions failing**. That
+is why teams quietly drop back to `READ COMMITTED` and ship write-skew bugs.
 
 ## The fix
 

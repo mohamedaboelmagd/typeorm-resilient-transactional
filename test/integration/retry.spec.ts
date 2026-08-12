@@ -149,7 +149,7 @@ describe('40001 serialization_failure', () => {
     expect(await onCallCount(dataSource)).toBe(1);
   });
 
-  it('re-runs the whole method body, since 40001 surfaces at COMMIT', async () => {
+  it('re-runs the whole method body, since no single statement can be re-issued', async () => {
     const barrier = new Barrier(2);
     let bodyRuns = 0;
 

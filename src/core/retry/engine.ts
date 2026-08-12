@@ -100,9 +100,10 @@ function notify(
  *
  * `attempt` is expected to open a brand-new transaction each time it is called —
  * reusing a rolled-back query runner would carry aborted-transaction state into
- * the retry. The whole callback re-runs, not just the commit, because PostgreSQL
- * raises `40001` at `COMMIT`, by which point every statement has already
- * "succeeded". That is also why per-statement retry cannot work.
+ * the retry. The whole callback re-runs, not just the failing statement, because
+ * PostgreSQL may raise `40001` at the conflicting statement *or* defer it to
+ * `COMMIT` — and either way the entire transaction is aborted. There is no single
+ * statement to re-issue, which is why per-statement retry cannot work.
  *
  * Shape follows the pseudocode in the build spec §5.4.
  */
