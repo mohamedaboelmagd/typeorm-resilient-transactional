@@ -137,9 +137,14 @@ Six ways this bites and how to avoid each: **[docs/safety.md](docs/safety.md)**.
 
 | Strategy                         |  Throughput |      p99 | Failure rate |
 | -------------------------------- | ----------: | -------: | -----------: |
-| `SERIALIZABLE`, no retry         |   109 ops/s |   623 ms |      **87%** |
+| `SERIALIZABLE`, no retry         |   109 ops/s |   168 ms |      **87%** |
 | `SERIALIZABLE` + retry           | 109.8 ops/s | 3,794 ms |       **0%** |
 | `READ COMMITTED` + ordered locks |   382 ops/s |   619 ms |           0% |
+
+That first p99 is low because failing is fast. 87% of those transactions did no useful work — a
+latency figure measured mostly over transactions that gave up is not a number to optimise for.
+
+![Throughput vs concurrency for all three strategies, at high and low contention](benchmarks/results.svg)
 
 Read that honestly: **retry makes `SERIALIZABLE` usable, not fast.** When you can name the rows a
 transaction will touch, ordered pessimistic locking is faster and degrades more gracefully — which

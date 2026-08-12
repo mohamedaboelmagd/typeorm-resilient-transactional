@@ -71,6 +71,11 @@ every retry** — the number a caller actually experiences.
 | SERIALIZABLE, no retry |          50 |              135.8 |  73.14 |  165.72 |  203.47 |       0 |    440 |        73.3% |       yes       |
 | SERIALIZABLE, no retry |         100 |                109 |  90.31 |  160.57 |  168.03 |       0 |    522 |        87.0% |       yes       |
 
+![Throughput vs concurrency for all three strategies, at high and low contention](results.svg)
+
+The chart is drawn from the tables above by `pnpm chart`, which `pnpm bench` runs for you —
+so it cannot drift from the numbers it plots.
+
 Money was conserved at **every** point on the matrix, including where transactions failed.
 Unretried SERIALIZABLE loses _work_, never _money_: PostgreSQL refuses the conflicting
 transaction rather than corrupting the balance.
