@@ -1,6 +1,7 @@
 packages:
   - '.'
   - 'examples/*'
+  - 'docs-site'
 allowBuilds:
   # Required: tsup and vitest both need the platform esbuild binary linked.
   esbuild: true
@@ -24,6 +25,7 @@ minimumReleaseAgeExclude:
   - '@changesets/should-skip-package@1.0.0'
   - '@changesets/types@7.0.0'
   - '@changesets/write@1.0.0'
+  - astro@7.2.1
 
 # Examples are workspace members so CI typechecks them against the real source.
 # A README snippet that stops compiling breaks the build.

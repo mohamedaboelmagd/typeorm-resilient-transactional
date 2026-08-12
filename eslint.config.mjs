@@ -4,7 +4,16 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['dist/**', 'node_modules/**', 'coverage/**', 'examples/*/dist/**']),
+  globalIgnores([
+    'dist/**',
+    'node_modules/**',
+    'coverage/**',
+    // Workspace members with their own toolchains and tsconfigs. The examples are
+    // typechecked in CI by `pnpm -r --filter './examples/*' typecheck`; the docs
+    // site is generated output plus Astro config.
+    'examples/**',
+    'docs-site/**',
+  ]),
 
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
