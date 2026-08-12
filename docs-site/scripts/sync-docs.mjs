@@ -52,8 +52,15 @@ function stripLeadingHeading(markdown) {
   return markdown.replace(/^#\s+.*\n+/, '');
 }
 
-function escapeYaml(value) {
-  return value.replace(/"/g, '\\"');
+/**
+ * YAML 1.2's double-quoted scalar uses the same escaping as a JSON string, so
+ * `JSON.stringify` is both correct and complete here.
+ *
+ * Hand-rolling this is how you end up escaping quotes but not backslashes — which
+ * is exactly what CodeQL caught in the first version of this file.
+ */
+function yamlString(value) {
+  return JSON.stringify(String(value));
 }
 
 async function emit(sourcePath, targetPath, title, order, description) {
@@ -61,8 +68,8 @@ async function emit(sourcePath, targetPath, title, order, description) {
 
   const frontmatter = [
     '---',
-    `title: "${escapeYaml(title)}"`,
-    ...(description === undefined ? [] : [`description: "${escapeYaml(description)}"`]),
+    `title: ${yamlString(title)}`,
+    ...(description === undefined ? [] : [`description: ${yamlString(description)}`]),
     'sidebar:',
     `  order: ${String(order)}`,
     '---',
