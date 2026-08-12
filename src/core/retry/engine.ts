@@ -1,5 +1,5 @@
 import { DEFAULT_RETRYABLE_SQLSTATES } from '../dialects/postgres.js';
-import { warn, warnOnce } from '../diagnostics.js';
+import { runGuarded, warn, warnOnce } from '../diagnostics.js';
 import { RetriesExhaustedError, TransactionTimeoutError } from '../errors/index.js';
 import { DEFAULT_BACKOFF, computeBackoff, sleep, type BackoffConfig } from './backoff.js';
 import { extractSqlState, isRetryable, isUnsafeToRetry } from './classifier.js';
@@ -88,11 +88,11 @@ function notify(
 ): void {
   if (callback === undefined) return;
 
-  try {
-    callback(info);
-  } catch (error) {
-    warn('retry-callback-failed', `${which} callback threw and was ignored: ${String(error)}`);
-  }
+  runGuarded(
+    () => callback(info),
+    (error) =>
+      warn('retry-callback-failed', `${which} callback threw and was ignored: ${String(error)}`),
+  );
 }
 
 /**

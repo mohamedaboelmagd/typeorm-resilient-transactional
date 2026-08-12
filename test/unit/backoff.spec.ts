@@ -151,4 +151,50 @@ describe('input hardening', () => {
     const delay = computeBackoff(3, { strategy: 'exponential-full-jitter', baseMs: 25 });
     expect(Number.isInteger(delay)).toBe(true);
   });
+
+  /**
+   * `capMs: Number(process.env.RETRY_CAP_MS)` is `NaN` when the variable is unset
+   * or misspelled, and nothing upstream validates it. `setTimeout(NaN)` fires
+   * immediately, so a typo in a deployment config would silently remove the
+   * jitter that stops two conflicting transactions waking together — the exact
+   * failure this library's default backoff exists to prevent, and one that would
+   * show up only as unexplained contention in production.
+   */
+  it.each([['fixed'], ['linear'], ['exponential'], ['exponential-full-jitter']] as const)(
+    'survives a NaN cap under %s',
+    (strategy) => {
+      const delay = computeBackoff(3, { strategy, capMs: Number.NaN });
+
+      expect(Number.isFinite(delay)).toBe(true);
+      expect(delay).toBeGreaterThanOrEqual(0);
+    },
+  );
+
+  it('survives a NaN base', () => {
+    const delay = computeBackoff(3, { strategy: 'exponential', baseMs: Number.NaN });
+
+    expect(Number.isFinite(delay)).toBe(true);
+    expect(delay).toBeGreaterThanOrEqual(0);
+  });
+
+  it('produces a usable delay for every hostile combination', () => {
+    const hostile = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, 0];
+
+    for (const baseMs of hostile) {
+      for (const capMs of hostile) {
+        for (const attempt of [1, 5, 1_000]) {
+          const delay = computeBackoff(attempt, {
+            strategy: 'exponential-full-jitter',
+            baseMs,
+            capMs,
+          });
+
+          expect(Number.isFinite(delay), `baseMs=${String(baseMs)} capMs=${String(capMs)}`).toBe(
+            true,
+          );
+          expect(delay).toBeGreaterThanOrEqual(0);
+        }
+      }
+    }
+  });
 });

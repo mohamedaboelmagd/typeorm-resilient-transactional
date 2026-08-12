@@ -110,6 +110,59 @@ describe('failing hooks are contained', () => {
     expect(after).toHaveBeenCalledTimes(1);
     expect(codes).toContain('hook-failed');
   });
+
+  /**
+   * `RetryHook` returns `void`, but TypeScript accepts an `async` function there
+   * without complaint — so `runOnRetry(async () => metrics.push(info))` compiles
+   * cleanly. Its rejection is not a throw, so the `try/catch` above misses it,
+   * and an unhandled rejection terminates the process on Node 15+. That would let
+   * a metrics backend outage kill a transaction mid-retry, which is the opposite
+   * of what an observability hook is for. Commit hooks are already awaited; this
+   * closes the same hole on the one path that cannot afford to wait.
+   */
+  it('swallows a rejected promise from an async retry hook', async () => {
+    const codes: string[] = [];
+    setDiagnosticHandler((event) => codes.push(event.code));
+
+    const registry = new HookRegistry();
+    const after = vi.fn();
+
+    // Deliberately the mistake a consumer makes. `tsc --strict` accepts this
+    // silently; only the type-aware ESLint rule below objects, and plenty of
+    // projects do not run it.
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    registry.addRetry(() => Promise.reject(new Error('metrics down')));
+    registry.addRetry(after);
+
+    expect(() => registry.runRetry(info)).not.toThrow();
+
+    // The rejection lands a microtask later; an escaped one fails the run.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(after, 'a slow hook must not block the ones after it').toHaveBeenCalledTimes(1);
+    expect(codes).toContain('hook-failed');
+  });
+
+  it('does not wait for an async retry hook to settle', () => {
+    const registry = new HookRegistry();
+    let settled = false;
+
+    registry.addRetry(
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            settled = true;
+            resolve(undefined);
+          }, 50);
+        }),
+    );
+
+    registry.runRetry(info);
+
+    // Retry latency must not depend on how fast someone's telemetry pipeline is.
+    expect(settled).toBe(false);
+  });
 });
 
 describe('rollback hooks receive the cause', () => {

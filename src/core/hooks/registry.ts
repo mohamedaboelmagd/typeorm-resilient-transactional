@@ -1,4 +1,4 @@
-import { warn } from '../diagnostics.js';
+import { runGuarded, warn } from '../diagnostics.js';
 import type { RetryInfo } from '../retry/engine.js';
 
 export type CommitHook = () => void | Promise<void>;
@@ -99,14 +99,19 @@ export class HookRegistry {
     await this.runComplete(error);
   }
 
-  /** Synchronous by design — this fires between attempts, on the hot path. */
+  /**
+   * Synchronous by design — this fires between attempts, on the hot path.
+   *
+   * A hook that returns a promise anyway is not awaited, but its rejection is
+   * still caught; see `runGuarded`.
+   */
   runRetry(info: RetryInfo): void {
     for (const hook of this.retryHooks) {
-      try {
-        hook(info);
-      } catch (hookError) {
-        warn('hook-failed', `A retry hook threw and was ignored: ${String(hookError)}`);
-      }
+      runGuarded(
+        () => hook(info),
+        (hookError) =>
+          warn('hook-failed', `A retry hook threw and was ignored: ${String(hookError)}`),
+      );
     }
   }
 

@@ -45,6 +45,21 @@ function exponentialCeiling(attempt: number, baseMs: number, capMs: number): num
 }
 
 /**
+ * Falls back to the default when a value cannot produce a usable delay.
+ *
+ * Nothing upstream validates these, and `capMs: Number(process.env.RETRY_CAP_MS)`
+ * is `NaN` whenever that variable is unset or misspelled. `NaN` survives every
+ * clamp below — `Math.min(NaN, x)` and `Math.max(0, NaN)` are both `NaN` — and
+ * `setTimeout(NaN)` fires immediately, so a typo in a deployment config would
+ * silently remove the jitter that keeps two conflicting transactions from waking
+ * together. `Infinity` is no better: `setTimeout` clamps it to 1ms and warns.
+ * Neither is a cap anyone meant, so both defer to the default.
+ */
+function usableOr(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+/**
  * Milliseconds to wait before `attempt` (1-based).
  *
  * `random` is injectable so jitter can be asserted in tests rather than sampled.
@@ -55,8 +70,8 @@ export function computeBackoff(
   random: () => number = Math.random,
 ): number {
   const strategy = config?.strategy ?? DEFAULT_BACKOFF.strategy;
-  const baseMs = config?.baseMs ?? DEFAULT_BACKOFF.baseMs;
-  const capMs = config?.capMs ?? DEFAULT_BACKOFF.capMs;
+  const baseMs = usableOr(config?.baseMs, DEFAULT_BACKOFF.baseMs);
+  const capMs = usableOr(config?.capMs, DEFAULT_BACKOFF.capMs);
 
   const n = Math.max(1, Math.floor(attempt));
 

@@ -34,6 +34,43 @@ export function warn(code: string, message: string): void {
   emitDiagnostic({ level: 'warn', code, message });
 }
 
+/**
+ * Runs an observability callback so that nothing it does can take the process
+ * down.
+ *
+ * These callbacks are declared `=> void`, but TypeScript accepts an `async`
+ * function wherever a void-returning one is expected — `onRetry: async (info) =>
+ * metrics.push(info)` compiles without a complaint. A `try`/`catch` never sees
+ * that rejection, and an unhandled one terminates the process on Node 15+, so a
+ * metrics backend going down would kill a transaction mid-retry. That is exactly
+ * backwards: observability must not be able to break the thing it observes.
+ *
+ * The result is deliberately **not** awaited. These fire between retry attempts,
+ * and retry latency must not depend on how fast someone's telemetry pipeline is.
+ */
+export function runGuarded(call: () => unknown, onError: (error: unknown) => void): void {
+  const report = (error: unknown): void => {
+    try {
+      onError(error);
+    } catch {
+      /* a diagnostic handler that throws must not resurface as a new failure */
+    }
+  };
+
+  let result: unknown;
+
+  try {
+    result = call();
+  } catch (error) {
+    report(error);
+    return;
+  }
+
+  if (typeof (result as { then?: unknown } | null)?.then === 'function') {
+    (result as PromiseLike<unknown>).then(undefined, report);
+  }
+}
+
 /** Warns once per code. Patch-degradation notices must not fire per call site. */
 const seen = new Set<string>();
 

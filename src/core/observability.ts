@@ -1,5 +1,5 @@
 import { getResilientDefaults } from './config.js';
-import { warn } from './diagnostics.js';
+import { runGuarded, warn } from './diagnostics.js';
 import type { IsolationLevel } from './enums.js';
 import type { FailedTransactionOutcome, TransactionOutcome } from './metrics.js';
 import { extractSqlState } from './retry/classifier.js';
@@ -25,11 +25,9 @@ export interface ObservabilityContext {
 function safely(label: string, fn: (() => void) | undefined): void {
   if (fn === undefined) return;
 
-  try {
-    fn();
-  } catch (error) {
-    warn('observer-failed', `${label} threw and was ignored: ${String(error)}`);
-  }
+  runGuarded(fn, (error) =>
+    warn('observer-failed', `${label} threw and was ignored: ${String(error)}`),
+  );
 }
 
 function telemetryEnabled(): boolean {
