@@ -40,6 +40,19 @@ jobs:
       - run: pnpm build
       - run: pnpm attw
 
+      # An unset token authenticates as nobody and npm reports it as a 403 about
+      # two-factor authentication, which sends you looking in the wrong place.
+      - name: Check the npm token is present
+        env:
+          TOKEN: ${{ secrets.NPM_TOKEN_CI || secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Neither NPM_TOKEN_CI nor NPM_TOKEN is set. Add a repository secret" \
+                 "containing an npm *Automation* token (classic), which bypasses 2FA for CI."
+            exit 1
+          fi
+          echo "npm token present (${#TOKEN} characters)."
+
       - name: Create release PR or publish
         uses: changesets/action@v1
         with:
@@ -49,7 +62,9 @@ jobs:
           title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Accepts either secret name, so renaming one does not silently publish
+          # with an empty token — which fails as a confusing 403, not as "unset".
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_CI || secrets.NPM_TOKEN }}
           # Signs the published tarball with a link back to this workflow run,
           # so consumers can verify where it was built.
           NPM_CONFIG_PROVENANCE: 'true'
