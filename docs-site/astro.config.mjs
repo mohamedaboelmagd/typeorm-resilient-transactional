@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, passthroughImageService } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 const REPO = 'https://github.com/mohamedaboelmagd/typeorm-resilient-transactional';
@@ -7,6 +7,11 @@ const REPO = 'https://github.com/mohamedaboelmagd/typeorm-resilient-transactiona
 export default defineConfig({
   site: 'https://mohamedaboelmagd.github.io',
   base: '/typeorm-resilient-transactional',
+  // The only image here is a generated SVG, which has nothing to optimise —
+  // the default service would pull in `sharp` to resize a vector. Passthrough
+  // keeps the docs build dependency-free, and matches the repo's zero-runtime-
+  // dependency habit even though nothing here ships to npm.
+  image: { service: passthroughImageService() },
   integrations: [
     starlight({
       title: 'typeorm-resilient-transactional',

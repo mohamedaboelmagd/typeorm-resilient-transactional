@@ -10,7 +10,7 @@
  * Relative links between docs are rewritten to the site's URL shape.
  */
 
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,8 +29,25 @@ const PAGES = [
   { from: 'benchmarks/RESULTS.md', to: 'benchmarks.md', title: 'Benchmarks', order: 7 },
 ];
 
+/**
+ * Images the synced Markdown points at.
+ *
+ * Astro resolves a relative image path in a content collection against the file
+ * that references it, so copying assets in beside the generated pages is what
+ * makes one path work from every page. It has to be one path: the sources spell
+ * it differently — `benchmarks/results.svg` from the README, `results.svg` from
+ * `benchmarks/RESULTS.md` — because each is correct where that file lives on
+ * GitHub, which is the tree these files are written for first.
+ *
+ * A missing asset fails the build rather than rendering a broken image, so
+ * adding an image to the docs means adding it here.
+ */
+const ASSETS = ['benchmarks/results.svg'];
+
 /** Repo-relative links → site routes. */
 const LINK_REWRITES = [
+  // Every spelling of an asset path collapses to the copy beside the page.
+  [/\]\((?:\.\.\/)*(?:benchmarks\/)?(results\.svg)\)/g, '](./$1)'],
   [/\]\(docs\/adr\/([\w-]+)\.md\)/g, '](/adr/$1/)'],
   [/\]\(adr\/([\w-]+)\.md\)/g, '](/adr/$1/)'],
   [/\]\((?:\.\.\/)*docs\/([\w-]+)\.md\)/g, '](/$1/)'],
@@ -82,6 +99,10 @@ async function emit(sourcePath, targetPath, title, order, description) {
 
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
+
+for (const asset of ASSETS) {
+  await copyFile(path.join(repoRoot, asset), path.join(outDir, path.basename(asset)));
+}
 
 for (const page of PAGES) {
   await emit(path.join(repoRoot, page.from), path.join(outDir, page.to), page.title, page.order);
