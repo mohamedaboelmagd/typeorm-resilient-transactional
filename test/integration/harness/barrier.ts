@@ -84,3 +84,18 @@ export async function race2<A, B>(
 export function reasonOf(result: PromiseSettledResult<unknown>): unknown {
   return result.status === 'rejected' ? result.reason : undefined;
 }
+
+/**
+ * Rethrows the first rejection, for tests that only care about what the sessions
+ * did rather than which one lost the race.
+ *
+ * `race2` settles instead of rejecting, which is what tests inspecting the loser
+ * need — but a test that ignores the results turns "one session threw" into a
+ * count mismatch three assertions later, destroying the evidence for why. Every
+ * caller that does not read the results should pipe them through here.
+ */
+export function assertBothSucceeded(results: readonly PromiseSettledResult<unknown>[]): void {
+  for (const result of results) {
+    if (result.status === 'rejected') throw result.reason;
+  }
+}

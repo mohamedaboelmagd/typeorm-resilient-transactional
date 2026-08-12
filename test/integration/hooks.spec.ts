@@ -22,7 +22,7 @@ import {
 } from '../../src/index.js';
 import { resetDiagnostics, setDiagnosticHandler } from '../../src/core/diagnostics.js';
 import { Note, createFixtureDataSource, noteIds, resetFixtures } from './harness/fixtures.js';
-import { Barrier, race2 } from './harness/barrier.js';
+import { Barrier, assertBothSucceeded, race2 } from './harness/barrier.js';
 import { setupWriteSkewFixture } from './harness/conflicts.js';
 
 /**
@@ -36,6 +36,17 @@ let dataSource: DataSource;
 class Boom extends Error {}
 
 const fast = { strategy: 'exponential-full-jitter', baseMs: 1, capMs: 20 } as const;
+
+/**
+ * The retry budget for the tests below that need *both* sessions to finish.
+ *
+ * These assert hook semantics, not that five attempts is enough to win a
+ * contention race — the loser can be aborted again on its retry while the
+ * winner's COMMIT is still in flight, which on a loaded runner extends the
+ * chain (see `retry.spec.ts` for the measurements). The budget is generous so a
+ * busy runner cannot turn a semantics test into a coin flip.
+ */
+const contended = { maxAttempts: 25, backoff: fast } as const;
 
 beforeAll(async () => {
   initializeResilientContext();
@@ -178,17 +189,21 @@ describe('hooks and retry', () => {
             await manager.query('UPDATE doctor SET on_call = false WHERE id = $1', [doctorId]);
           }
         },
-        { isolation: IsolationLevel.SERIALIZABLE, retry: { maxAttempts: 5, backoff: fast } },
+        { isolation: IsolationLevel.SERIALIZABLE, retry: contended },
       );
 
-    await race2(barrier, session(1), session(2));
+    assertBothSucceeded(await race2(barrier, session(1), session(2)));
 
     // Two sessions, two commit hooks — never three, even though one session ran
     // its body twice and registered a hook each time.
     expect(effects).toHaveLength(2);
 
-    // And the survivor reports the attempt it actually committed on.
-    expect(effects.some((e) => e.endsWith('attempt-2'))).toBe(true);
+    // And the survivor reports the attempt it actually committed on. Which
+    // number that is depends on how many times the runner let it lose, so this
+    // asserts the property — one session committed on a later attempt — rather
+    // than pinning the count.
+    const attempts = effects.map((e) => Number(e.slice(e.lastIndexOf('-') + 1)));
+    expect(Math.max(...attempts)).toBeGreaterThanOrEqual(2);
   });
 
   it('fires retry hooks between attempts', async () => {
@@ -210,10 +225,10 @@ describe('hooks and retry', () => {
             await manager.query('UPDATE doctor SET on_call = false WHERE id = $1', [doctorId]);
           }
         },
-        { isolation: IsolationLevel.SERIALIZABLE, retry: { maxAttempts: 5, backoff: fast } },
+        { isolation: IsolationLevel.SERIALIZABLE, retry: contended },
       );
 
-    await race2(barrier, session(1), session(2));
+    assertBothSucceeded(await race2(barrier, session(1), session(2)));
 
     expect(seen.length).toBeGreaterThanOrEqual(1);
     expect(seen[0]?.sqlstate).toBe('40001');
@@ -240,12 +255,12 @@ describe('hooks and retry', () => {
         },
         {
           isolation: IsolationLevel.SERIALIZABLE,
-          retry: { maxAttempts: 5, backoff: fast },
+          retry: contended,
           name: 'takeOffCall',
         },
       );
 
-    await race2(barrier, session(1), session(2));
+    assertBothSucceeded(await race2(barrier, session(1), session(2)));
 
     const warning = messages.find((m) => m.includes('takeOffCall'));
     expect(warning).toBeDefined();

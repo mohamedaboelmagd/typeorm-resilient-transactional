@@ -252,6 +252,29 @@ Three settings bound that:
 `timeoutMs` is the one people forget. Without it, `maxAttempts: 10` with an exponential cap of 500ms
 can take five seconds before failing, and your HTTP request has long since timed out.
 
+### How many attempts a conflict actually needs depends on the host, not just the workload
+
+A retry does not automatically succeed. The loser of a conflict re-reads the same rows, and if the
+winner's `COMMIT` is still in flight it sees the same state and conflicts again. So the number of
+attempts a transaction needs tracks **how long the winner holds its transaction open**, which
+stretches when the machine is busy.
+
+Measured on `postgres:17-alpine`, two sessions racing over the on-call-doctors write skew
+(`test/integration/hooks.spec.ts`), full-jitter backoff with `baseMs: 1, capMs: 20`:
+
+| Host                        | Rounds | Rounds needing a third attempt |
+| --------------------------- | -----: | -----------------------------: |
+| Idle 12-core machine        |    120 |                              0 |
+| Same machine, CPU saturated |    620 |                      17 (1–4%) |
+
+On an idle host the retry always succeeded on the second attempt. Under CPU pressure the chain
+lengthened — with the same database, the same query, and the same conflict. A budget tuned on a quiet
+laptop can therefore be too small on a loaded production box or a shared CI runner.
+
+Size `maxAttempts` for the loaded case, and use `timeoutMs` rather than a small attempt count to
+bound tail latency. The two do different jobs: `maxAttempts` decides how hard to try, `timeoutMs`
+decides how long the caller is willing to wait.
+
 Jitter is on by default because two transactions that just deadlocked are synchronised — PostgreSQL
 killed one at the instant it let the other proceed. Without jitter they back off by the same amount,
 wake together, and deadlock again. See [ADR 0007](adr/0007-full-jitter-default.md).

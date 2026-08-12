@@ -13,7 +13,7 @@ import {
   type RetryInfo,
 } from '../../src/index.js';
 import { createFixtureDataSource } from './harness/fixtures.js';
-import { Barrier, race2, reasonOf } from './harness/barrier.js';
+import { Barrier, assertBothSucceeded, race2, reasonOf } from './harness/barrier.js';
 import {
   onCallCount,
   produceDeadlock,
@@ -34,6 +34,19 @@ import {
 let dataSource: DataSource;
 
 const fast = { strategy: 'exponential-full-jitter', baseMs: 1, capMs: 20 } as const;
+
+/**
+ * The retry budget for tests that need *both* sessions to finish.
+ *
+ * The loser of a conflict can be aborted a second time on its retry, because it
+ * re-reads the same rows while the winner's COMMIT is still in flight. So the
+ * budget has to cover a stall on a busy runner, not just the one retry the idle
+ * path needs. Measured on `postgres:17-alpine`: a third attempt never occurred
+ * across 120 unloaded rounds, and appeared in 1–4% of rounds under CPU
+ * contention. This headroom is a fact about CI, not about the library — the
+ * tests that assert what the budget itself does set it explicitly.
+ */
+const contended = { maxAttempts: 25, backoff: fast } as const;
 
 beforeAll(async () => {
   initializeResilientContext();
@@ -81,7 +94,7 @@ describe('40P01 deadlock_detected', () => {
         },
         {
           isolation: IsolationLevel.READ_COMMITTED,
-          retry: { maxAttempts: 5, backoff: fast },
+          retry: contended,
           onRetry: (info) => retries.push(info),
         },
       );
@@ -130,7 +143,7 @@ describe('40001 serialization_failure', () => {
         },
         {
           isolation: IsolationLevel.SERIALIZABLE,
-          retry: { maxAttempts: 5, backoff: fast },
+          retry: contended,
           onRetry: (info) => retries.push(info),
         },
       );
@@ -167,10 +180,10 @@ describe('40001 serialization_failure', () => {
             await manager.query('UPDATE doctor SET on_call = false WHERE id = $1', [doctorId]);
           }
         },
-        { isolation: IsolationLevel.SERIALIZABLE, retry: { maxAttempts: 5, backoff: fast } },
+        { isolation: IsolationLevel.SERIALIZABLE, retry: contended },
       );
 
-    await race2(barrier, session(1), session(2));
+    assertBothSucceeded(await race2(barrier, session(1), session(2)));
 
     // Two sessions, at least one of which ran twice.
     expect(bodyRuns).toBeGreaterThanOrEqual(3);

@@ -100,11 +100,19 @@ describe('SERIALIZABLE with retry', () => {
     // corrupted balance. The measured rate is recorded in
     // benchmarks/RESULTS.md; this bound only guards against a regression that
     // makes retry stop working altogether.
+    //
+    // The bound is deliberately loose, because the rate tracks host load rather
+    // than anything about the library: measured on one machine, 5.1% at load
+    // average 42 and 9.0% at load 63 — same database, same workload, and both
+    // over the 5% this used to require. A tight bound here does not test retry,
+    // it tests how busy the runner is. Retry actually breaking looks nothing
+    // like this: unretried SERIALIZABLE fails 96% of the time on this profile
+    // (benchmarks/RESULTS.md).
     const total = ITERATIONS * CONCURRENCY;
     expect(
       failures / total,
       `${String(failures)}/${String(total)} transfers exhausted their attempts`,
-    ).toBeLessThan(0.05);
+    ).toBeLessThan(0.25);
   }, 240_000);
 });
 
