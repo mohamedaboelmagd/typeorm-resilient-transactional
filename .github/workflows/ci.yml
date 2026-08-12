@@ -38,7 +38,7 @@ jobs:
       - run: pnpm verify:package
 
       # Handed to the node20-runtime job, which must not have pnpm on PATH.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist
@@ -179,7 +179,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Threshold is enforced in vitest.config.mts: 90% on src/core/.
       - run: pnpm coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
