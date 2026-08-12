@@ -107,14 +107,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
-      - run: node scripts/check-node20.mjs
+      # A container rather than setup-node: setup-node reads the `packageManager`
+      # field and insists on a pnpm binary, which is the one thing that must not
+      # be here. This gets a clean Node 20 with nothing else on PATH.
+      - name: Load the built package on Node 20
+        run: |
+          docker run --rm -v "$PWD":/work -w /work node:20-alpine \
+            node scripts/check-node20.mjs
 
   integration:
     name: integration · pg ${{ matrix.postgres }}
