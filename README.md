@@ -292,6 +292,13 @@ Not an ORM, query builder, or repository abstraction. No TypeORM 0.2.x. No distr
 | [Prior art](docs/prior-art.md)         | What we copied, improved, and rejected                        |
 | [ADRs](docs/adr)                       | Why each decision went the way it did                         |
 
+### Background reading
+
+[**40001 is not a query error**](https://dev.to/mohamedaboelmagd/40001-is-not-a-query-error-2497) —
+why retrying the failing *query* cannot work on PostgreSQL, what whole-transaction retry costs
+(measured), and why [TypeORM #9806](https://github.com/typeorm/typeorm/issues/9806) has been open
+since 2023. The reasoning behind most of this library's design.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Every claim in this README is backed by a test or a
