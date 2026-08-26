@@ -55,6 +55,47 @@ async transfer(from: string, to: string, amount: number) {
 
 The rule of thumb: **if undoing it requires more than `ROLLBACK`, it belongs in `runOnCommit`.**
 
+### The hook is necessary, not sufficient
+
+Note what the fixed example defers: the email and the publish, not the charge. `runOnCommit` fixes
+the body running more than once. It does not make delivery reliable, and those are different
+problems.
+
+Once `COMMIT` returns, the row is durable whether or not the hook that follows succeeds. A hook that
+throws is logged and swallowed — see below — which leaves a ledger saying paid with no charge
+against it. Retrying that hook by hand is its own hazard: a payment call that timed out may have
+gone through, and the operator cannot tell from the outside.
+
+So for anything that has to happen exactly once, the hook is not the delivery mechanism:
+
+```ts
+// ✓ FIXED — delivery survives a crash between COMMIT and the send
+@Transactional({ isolation: 'SERIALIZABLE', retry: { maxAttempts: 5 } })
+async transfer(transferId: string, from: string, to: string, amount: number) {
+  await this.accounts.decrement({ id: from }, 'balance', amount);
+  await this.accounts.increment({ id: to }, 'balance', amount);
+
+  // Same transaction as the balances, so it rolls back with them on a failed
+  // attempt — and lands exactly once, with them, when an attempt commits.
+  await this.outbox.insert({
+    kind: 'charge',
+    idempotencyKey: `transfer:${transferId}`,
+    payload: { amount },
+  });
+
+  runOnCommit(() => this.drainOutbox());   // promptness, not the guarantee
+}
+```
+
+A background drain is what makes delivery survive the process dying between `COMMIT` and the send;
+the hook only saves it from waiting for the next poll. The idempotency key is what makes redelivery
+safe, and it has to come from the caller — generating one inside the body with `randomUUID()` is
+hazard §3, and a fresh key per attempt defeats the entire point. Stripe accepts one natively as
+`Idempotency-Key`.
+
+This library ships no outbox, deliberately: it cannot know your delivery semantics, and guessing
+them is how you get a payment library nobody can audit. See [Non-goals](../README.md#non-goals).
+
 ### Commit hooks run outside the transaction
 
 By the time a commit hook fires, the transaction is over. That is deliberate — a hook that queries
@@ -69,8 +110,9 @@ the database gets a pooled connection rather than the finished transaction's. Tw
   ```
 
 - A hook that throws is **logged and swallowed**. The transaction is already durable; failing the
-  caller afterwards would misrepresent what happened. If delivery matters, write to an outbox table
-  inside the transaction instead.
+  caller afterwards would misrepresent what happened. That is exactly why a hook cannot be your
+  delivery mechanism — see [The hook is necessary, not
+  sufficient](#the-hook-is-necessary-not-sufficient).
 
 ### The library tells you when this happens
 
