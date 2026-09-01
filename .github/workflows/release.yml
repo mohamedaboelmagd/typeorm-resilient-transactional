@@ -64,7 +64,7 @@ jobs:
           echo "publisher for this package pointing at ${{ github.repository }} and release.yml."
 
       - name: Create release PR or publish
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           version: pnpm changeset version
           publish: pnpm changeset publish
